@@ -749,6 +749,17 @@ export function UniversityTab({ app }: { app: Application }) {
           </span>
           <span className="text-13 font-semibold text-slate-800">{brief.university}</span>
           <span className="text-11 text-slate-500">read against {brief.programme}</span>
+          {/* When the dossier is filed under another name — 'Ross' for a
+              Michigan MBA — say so here rather than leaving the officer to
+              wonder why the heading and the file disagree. */}
+          {brief.matchedBy === 'token' && brief.dossier && (
+            <span
+              className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+              title="Matched on name, not on an exact corpus key"
+            >
+              dossier: {brief.dossier}
+            </span>
+          )}
           <span className="ml-auto flex items-center gap-1.5">
             <Chip
               tone={brief.coverage === 'adequate' ? 'green' : 'amber'}

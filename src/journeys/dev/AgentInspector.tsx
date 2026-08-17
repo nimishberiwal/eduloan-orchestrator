@@ -29,6 +29,7 @@ import { tasksFor } from '@/lib/customerTasks'
 import { customerFacingStatus } from '@/data/customerMirror'
 import { UNIVERSITY_INTEL } from '@/data/universityIntel'
 import { US_UNIVERSITIES } from '@/lib/eligibility'
+import { allFindings, nameMatchesKey, resolveIntel } from '@/lib/agents/universityCorpus'
 
 const SAMPLE_FILE = 'marksheet-front.jpg'
 const SAMPLE_KB = 620
@@ -189,6 +190,10 @@ export function AgentInspector() {
       </p>
 
       <UniversitySection apps={curated} />
+      {/* Fed from EVERY application, not the curated 14 — the point is to see
+          every university name the system can produce, including the 30-name
+          bulk pool where the business-school concatenations live. */}
+      <ResolutionSection apps={apps} />
     </div>
   )
 }
@@ -241,6 +246,252 @@ function LiveRun({ app, fileName }: { app: Application; fileName: string }) {
 //           specifically: it runs against an application that HAS a brief
 //           attached, which is the only state in which a leak is possible.
 // ============================================================================
+
+// ============================================================================
+// §E — corpus RESOLUTION diagnostic.
+//
+// The corpus is being extended to the FT Top 50 US MBA schools. Three
+// vocabularies name these institutions and none of them agree: the selectable
+// list in `lib/eligibility.ts`, the 30-name pool in `data/seedBulk.ts`, and
+// whatever key the researcher filed each dossier under. A business school is
+// conventionally named for its benefactor — 'Ross', 'Tepper', 'Marshall' — not
+// for its parent university.
+//
+// A resolution miss is SILENT: it looks exactly like `coverage: 'absent'`, which
+// renders as a legitimate "nobody has looked" state. So the failure mode is a
+// researched dossier sitting in the corpus, unreachable, while the panel says
+// nobody researched it. This table is the thing that makes that visible: every
+// distinct university across every live application, resolved twice — once for a
+// business programme and once for an engineering one — with the dossier key and
+// the match method shown.
+//
+// Read it after any corpus extension. Rows in the `unresolved` count are either
+// genuinely un-researched or misfiled, and the two are worth telling apart.
+// ============================================================================
+
+const PROBE_BUSINESS = 'MBA'
+const PROBE_STEM = 'MS Computer Science'
+
+/** Name-matching guards, asserted against a FIXED table rather than against
+ *  whatever dossiers happen to exist today.
+ *
+ *  The pairs that matter most are the ones that must NOT match — a wrong match
+ *  attaches real, sourced findings about one institution to a different
+ *  institution's credit file, which is worse than no brief at all. Those cannot
+ *  be demonstrated from the live corpus, because the dangerous counterpart
+ *  dossier ('Boston University' alongside 'Boston College') may not be in it. */
+const MATCH_GUARDS: { app: string; key: string; expect: boolean; why: string }[] = [
+  // --- must match: the cases the FT Top 50 MBA scope introduces ---
+  { app: 'University of Michigan Ross', key: 'Michigan', expect: true, why: 'parent-university key reaches the concatenated seed name; leftover "ross" names a school, not an institution' },
+  { app: 'University of Michigan Ross', key: 'Ross', expect: true, why: 'a benefactor key would also reach it' },
+  { app: 'University of Michigan Ross', key: 'University of Michigan Ross School of Business', expect: true, why: 'full school name, stopwords dropped' },
+  { app: 'Purdue University', key: 'Purdue', expect: true, why: '"University" is a stopword' },
+  { app: 'NYU Stern', key: 'Stern', expect: true, why: 'benefactor key' },
+  // --- must NOT match: the wrong-institution cases ---
+  { app: 'University of Michigan', key: 'Ross', expect: false, why: 'no shared token — an engineering file must not pull the MBA brief' },
+  { app: 'Michigan State University', key: 'Michigan', expect: false, why: 'leftover "state" defines a different institution' },
+  { app: 'Penn State University', key: 'Penn', expect: false, why: 'FOUND LIVE — Penn State was resolving to the Penn/Wharton dossier before the institution-token rule was generalised' },
+  { app: 'Illinois Institute of Technology IIT Chicago', key: 'Chicago', expect: false, why: 'place-only key refused — leftover names another institution entirely' },
+  { app: 'Boston College', key: 'Boston University', expect: false, why: 'a place name alone cannot carry a match' },
+  { app: 'Boston University', key: 'Boston College', expect: false, why: 'same guard, reversed' },
+  { app: 'University of Washington', key: 'Washington University', expect: false, why: 'genuinely different institutions' },
+  { app: 'NYU', key: 'Stern', expect: false, why: 'no shared token — the corpus must name the parent to reach this file' },
+  { app: 'Georgia Tech', key: 'Georgia Institute of Technology', expect: false, why: 'KNOWN LIMIT — "Tech" and "Technology" are different tokens; the corpus correctly files this one as "Georgia Tech"' },
+]
+
+interface ResolutionRow {
+  university: string
+  short: string
+  apps: number
+  businessKey?: string
+  businessMethod: 'exact' | 'token' | 'none'
+  stemKey?: string
+  stemMethod: 'exact' | 'token' | 'none'
+}
+
+function ResolutionSection({ apps }: { apps: Application[] }) {
+  const rows = useMemo(() => {
+    const byKey = new Map<string, ResolutionRow>()
+    for (const a of apps) {
+      const key = `${a.university}||${a.universityShort}`
+      const existing = byKey.get(key)
+      if (existing) {
+        existing.apps += 1
+        continue
+      }
+      const b = resolveIntel(a.university, a.universityShort, PROBE_BUSINESS)
+      const s = resolveIntel(a.university, a.universityShort, PROBE_STEM)
+      byKey.set(key, {
+        university: a.university,
+        short: a.universityShort,
+        apps: 1,
+        businessKey: b.matchedKey,
+        businessMethod: b.method,
+        stemKey: s.matchedKey,
+        stemMethod: s.method,
+      })
+    }
+    // Sorted for a stable read across runs.
+    return [...byKey.values()].sort((x, y) => x.university.localeCompare(y.university))
+  }, [apps])
+
+  // Determinism of resolution itself — scoring plus tiebreaks must be a total
+  // order, or the same file could resolve to a different dossier between runs.
+  const resolutionDeterministic = useMemo(
+    () =>
+      rows.every((r) => {
+        const a = resolveIntel(r.university, r.short, PROBE_BUSINESS)
+        const b = resolveIntel(r.university, r.short, PROBE_BUSINESS)
+        return a.matchedKey === b.matchedKey && a.method === b.method
+      }),
+    [rows],
+  )
+
+  const guardFailures = MATCH_GUARDS.filter((g) => nameMatchesKey(g.app, g.key) !== g.expect)
+  const unresolved = rows.filter((r) => r.businessMethod === 'none' && r.stemMethod === 'none')
+  const split = rows.filter((r) => r.businessKey !== r.stemKey)
+  const appsCovered = rows
+    .filter((r) => r.businessMethod !== 'none' || r.stemMethod !== 'none')
+    .reduce((n, r) => n + r.apps, 0)
+  const totalApps = rows.reduce((n, r) => n + r.apps, 0)
+
+  return (
+    <>
+      <h2 className="mb-2 mt-6 text-[14px] font-bold">corpus resolution (§E — FT Top 50 MBA scope)</h2>
+
+      {/* Name-matching guards. These run against a fixed table, so they hold
+          whether or not the corpus has landed its MBA dossiers yet. */}
+      <section
+        className={`mb-3 rounded border p-3 ${
+          guardFailures.length === 0 ? 'border-emerald-300 bg-emerald-50' : 'border-red-300 bg-red-50'
+        }`}
+      >
+        <p className="font-bold">
+          Name-matching guards:{' '}
+          {guardFailures.length === 0
+            ? `all ${MATCH_GUARDS.length} hold — business-school keys reach their files, and wrong-institution pairs are refused`
+            : `${guardFailures.length} of ${MATCH_GUARDS.length} FAILED`}
+        </p>
+        <table className="mt-2 w-full border-collapse bg-white text-left">
+          <tbody>
+            {MATCH_GUARDS.map((g) => {
+              const got = nameMatchesKey(g.app, g.key)
+              const ok = got === g.expect
+              return (
+                <tr key={`${g.app}|${g.key}`} className={ok ? '' : 'bg-red-100'}>
+                  <td className="border border-slate-200 px-2 py-0.5">{g.app}</td>
+                  <td className="border border-slate-200 px-2 py-0.5 text-slate-400">vs</td>
+                  <td className="border border-slate-200 px-2 py-0.5 font-medium">{g.key}</td>
+                  <td
+                    className={`border border-slate-200 px-2 py-0.5 font-bold ${
+                      ok ? 'text-emerald-700' : 'text-red-700'
+                    }`}
+                  >
+                    {got ? 'match' : 'no match'} {ok ? '✓' : `✗ expected ${g.expect ? 'match' : 'no match'}`}
+                  </td>
+                  <td className="border border-slate-200 px-2 py-0.5 text-slate-500">{g.why}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <section
+        className={`mb-3 rounded border p-3 ${
+          resolutionDeterministic ? 'border-emerald-300 bg-emerald-50' : 'border-red-300 bg-red-50'
+        }`}
+      >
+        <p className="font-bold">
+          Resolution determinism:{' '}
+          {resolutionDeterministic
+            ? 'every university resolves to the same dossier on repeated runs'
+            : 'NON-DETERMINISTIC — scoring ties are not totally ordered'}
+        </p>
+        <p className="text-slate-600">
+          Corpus: <b>{UNIVERSITY_INTEL.length}</b> dossiers ·{' '}
+          {UNIVERSITY_INTEL.reduce((n, u) => n + u.findings.length, 0)} findings. Applications:{' '}
+          <b>{appsCovered}</b> of {totalApps} resolve to a dossier, across{' '}
+          {rows.length - unresolved.length} of {rows.length} distinct university names.
+        </p>
+        <p className={unresolved.length === 0 ? 'text-slate-600' : 'text-amber-700'}>
+          Unresolved: {unresolved.length === 0 ? 'none' : `${unresolved.length} name(s) — `}
+          {unresolved.length > 0 && (
+            <span className="font-medium">{unresolved.map((r) => r.university).join(' · ')}</span>
+          )}
+        </p>
+        <p className="text-slate-600">
+          Programme-sensitive splits (a business programme resolving to a different dossier than an
+          engineering one at the same university):{' '}
+          <b>{split.length}</b>
+          {split.length > 0 && ` — ${split.map((r) => r.university).join(' · ')}`}
+        </p>
+      </section>
+
+      <table className="w-full border-collapse bg-white text-left">
+        <thead className="sticky top-0 bg-slate-200">
+          <tr>
+            {['university (as on the file)', 'short', 'apps', `dossier · ${PROBE_BUSINESS}`, `dossier · ${PROBE_STEM}`].map(
+              (h) => (
+                <th key={h} className="border border-slate-300 px-2 py-1 font-semibold">
+                  {h}
+                </th>
+              ),
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const none = r.businessMethod === 'none' && r.stemMethod === 'none'
+            const cell = (key: string | undefined, method: 'exact' | 'token' | 'none') =>
+              method === 'none' ? (
+                <span className="text-amber-700">—</span>
+              ) : (
+                <>
+                  <span className="font-medium text-emerald-700">{key}</span>{' '}
+                  <span className="text-slate-400">({method})</span>
+                </>
+              )
+            return (
+              <tr key={`${r.university}|${r.short}`} className={none ? 'bg-amber-50' : ''}>
+                <td className="border border-slate-200 px-2 py-1">{r.university}</td>
+                <td className="border border-slate-200 px-2 py-1 text-slate-500">{r.short}</td>
+                <td className="border border-slate-200 px-2 py-1 tnum text-slate-500">{r.apps}</td>
+                <td
+                  className={`border border-slate-200 px-2 py-1 ${
+                    r.businessKey !== r.stemKey ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  {cell(r.businessKey, r.businessMethod)}
+                </td>
+                <td
+                  className={`border border-slate-200 px-2 py-1 ${
+                    r.businessKey !== r.stemKey ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  {cell(r.stemKey, r.stemMethod)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      <p className="mt-3 max-w-[100ch] text-slate-600">
+        An unresolved row and a genuinely un-researched university render{' '}
+        <em>identically</em> on the App-360 panel — both read <code>coverage: absent</code>. That is
+        why this table exists separately: it distinguishes “no dossier was written” from “a dossier
+        was written and we cannot reach it”. Blue cells are programme-sensitive splits, which is the
+        business-school preference working as intended.{' '}
+        <b>
+          Resolution carries NO alias table on purpose
+        </b>{' '}
+        — writing out fifty benefactor-to-university pairs would be reproducing the FT Top 50 list,
+        which is researched data and belongs in the corpus beside its source.
+      </p>
+    </>
+  )
+}
 
 interface UniProbe {
   appId: string
@@ -318,11 +569,11 @@ function probeUniversity(app: Application): UniProbe {
     revision: brief.revision,
     fetchedAt: brief.fetchedAt,
     coverage: brief.coverage,
+    // Counted against whichever dossier the brief ACTUALLY resolved to, which
+    // is programme-sensitive now that business schools are in scope.
     setAside: Math.max(
       0,
-      (UNIVERSITY_INTEL.find(
-        (u) => u.university === app.universityShort || u.name === app.university,
-      )?.findings.length ?? 0) - brief.sources.length,
+      allFindings(app.university, app.universityShort, app.program).length - brief.sources.length,
     ),
     // The corpus documents that `level` is never 'block'. Trust nothing: a brief
     // that could block would let a newspaper stop a customer's file.

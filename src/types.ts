@@ -500,6 +500,13 @@ export interface UniversityBrief {
    *  found it quiet; `absent` means it is not in the corpus at all. An absent
    *  brief must never be read as a clean bill of health. */
   coverage: 'adequate' | 'thin' | 'absent'
+  /** The corpus dossier this brief was actually built from, and how it was
+   *  reached. Recorded because the three vocabularies naming these institutions
+   *  do not agree — and once the corpus covers business schools by benefactor
+   *  name ('Ross', 'Tepper'), an officer reading a brief filed under a name that
+   *  is not the one on the application is entitled to see why. */
+  dossier?: string
+  matchedBy: 'exact' | 'token' | 'none'
   /** The corpus's own explanation of what it looked for and did not find,
    *  present when coverage is 'thin'. */
   coverageNote?: string

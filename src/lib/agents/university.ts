@@ -27,6 +27,7 @@
 // ============================================================================
 import type { Application, UniversityBrief, UniversityBriefSource } from '@/types'
 import type { IntelCategory, IntelFinding } from '@/data/universityIntel'
+import { UNIVERSITY_INTEL } from '@/data/universityIntel'
 import type { AgentFinding, AgentResult } from './types'
 import { finding, result } from './runtime'
 import { hoursSince, nowIso } from '@/lib/clock'
@@ -34,6 +35,8 @@ import {
   CATEGORY_LABEL,
   allFindings,
   coverageFor,
+  isBusinessProgramme,
+  resolveIntel,
   selectFindings,
 } from './universityCorpus'
 
@@ -124,13 +127,17 @@ function categoryMix(sources: UniversityBriefSource[]): { category: IntelCategor
 export function buildBrief(app: Application, now: string = nowIso()): UniversityBrief {
   const relevant = selectFindings(app.university, app.universityShort, app.program)
   const sources = relevant.map(toSource)
-  const coverage = coverageFor(app.university, app.universityShort)
+  const coverage = coverageFor(app.university, app.universityShort, app.program)
+  const resolution = resolveIntel(app.university, app.universityShort, app.program)
 
   // How many findings are on file for this university but were set aside as
   // irrelevant to the programme. Said out loud below, because "we found nothing"
   // and "we found six things and none of them touch your course" are different
   // statements and an officer should be able to tell them apart.
-  const setAside = Math.max(0, allFindings(app.university, app.universityShort).length - relevant.length)
+  const setAside = Math.max(
+    0,
+    allFindings(app.university, app.universityShort, app.program).length - relevant.length,
+  )
 
   const attention = sources.filter((s) => s.level === 'attention').length
   const adverse = sources.filter((s) => s.category === 'adverse').length
@@ -163,7 +170,7 @@ export function buildBrief(app: Application, now: string = nowIso()): University
             coverage.note ? ` ${coverage.note}` : ''
           } That is a finding, not a gap.`
         : coverage.state === 'absent'
-          ? `${app.university} is not in the research corpus, which covers the 14 universities the pre-qualification screen can select. Treat this brief as ABSENT, not as a clean result — nobody has looked.`
+          ? `${app.university} is not in the research corpus, which carries ${UNIVERSITY_INTEL.length} dossiers. Treat this brief as ABSENT, not as a clean result — nobody has looked.`
           : `${plural(setAside, 'item is', 'items are')} on file for ${app.university}, but none of them touch ${app.program}.`,
     )
   } else {
@@ -197,6 +204,23 @@ export function buildBrief(app: Application, now: string = nowIso()): University
     )
   }
 
+  // Say when the dossier was filed under a name that is not the one on the
+  // application. With business schools in the corpus this is the normal case for
+  // an MBA file — 'Ross' rather than 'University of Michigan Ross' — and an
+  // officer should not have to guess why the heading changed.
+  if (resolution.method === 'token' && resolution.matchedKey) {
+    // Only claim this is the business school when the KEY actually names one.
+    // The corpus files its MBA dossiers under the PARENT university short name
+    // ('Michigan', not 'Ross'), so gating this clause on the programme instead of
+    // the key described the dossier wrongly — a small lie on a credit surface.
+    const keyNamesSchool = /business|management|mba|school/i.test(resolution.matchedKey)
+    synthesis.push(
+      `Filed in the corpus under “${resolution.matchedKey}”${
+        keyNamesSchool && isBusinessProgramme(app.program) ? ', the business school for this programme' : ''
+      } — matched to this file on name rather than on an exact key. Confirm it is the same institution before relying on it.`,
+    )
+  }
+
   return {
     university: app.university,
     programme: app.program,
@@ -208,6 +232,8 @@ export function buildBrief(app: Application, now: string = nowIso()): University
     sources,
     coverage: coverage.state,
     ...(coverage.note ? { coverageNote: coverage.note } : {}),
+    ...(resolution.matchedKey ? { dossier: resolution.matchedKey } : {}),
+    matchedBy: resolution.method,
   }
 }
 

@@ -193,6 +193,32 @@ a design constraint of this prototype, and the standalone HTML build must work
 offline**, which a live crawl cannot. A real crawl therefore needs this endpoint;
 the front end's half of the conversation is already the shape above.
 
+### The name on the file is not the key in the corpus
+
+Three vocabularies name these institutions and none of them agree — the selectable
+list, the seed pool, and the corpus's own keys. Extending the corpus to the FT Top
+50 US MBA schools made this load-bearing: an application reading `University of
+Michigan Ross` has to reach a dossier filed as `Michigan`, and must **not** reach
+one filed as `Michigan State`.
+
+So the response carries **how the dossier was reached**, not just its contents:
+
+```json
+{ "brief": { "dossier": "Michigan", "matchedBy": "token", … } }
+```
+
+`matchedBy: "exact"` means the key matched outright; `"token"` means it was matched
+on name and the officer is shown a "confirm it is the same institution" line.
+**A resolution miss is silent** — it is indistinguishable from "nobody researched
+this university" unless the API says which of the two happened. Server-side, the
+same distinction must survive: return `matchedBy: "none"` with an empty brief
+rather than a 404, so the client can tell *absent* from *unreachable*.
+
+The prototype's matcher is the specification — `lib/agents/universityCorpus.ts`,
+with the guard table in `/__dev/agents` as its test cases. It refuses matches that
+rest on a bare place name (`University of Washington` ≠ `Washington University`)
+or that differ by an institution-defining word (`Penn` ≠ `Penn State`).
+
 ### The server owns the 24-hour cycle
 
 The prototype treats a brief older than **24 hours** as stale and re-crawls when

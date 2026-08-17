@@ -167,6 +167,28 @@ This also closed a **real pre-existing gap**: `Academics` previously persisted
 
 `tsc --noEmit` clean · `npm run build` clean (4.12s).
 
+### Phase B completion — APP-2901, all five remaining screens
+
+Walked end to end. App-360 → Extracted data reads:
+
+```
+APPLICANT
+  Cost of Attendance (E6)  cost per year   US$62,400 / US$62,400   pass   evidenced
+  Identity (E1)            full name       Ananya Rao / Ananya Rao pass   evidenced
+                           date of birth   14-08-2002 / 14-08-2002 pass   evidenced
+                           PAN             ABCDE1234F / ABCDE1234F pass   evidenced
+  Academic (E3)            4 fields        typed, no reading       pending self-declared
+  Admission (E5)           SEVIS ID        N0031882745 / same      pass   evidenced
+CO-APPLICANT
+  Income — salaried (P2)   monthly income  ₹2,11,400 / ₹2,11,400   pass   evidenced
+  Identity & relationship (P1) full name   Rajesh Rao, no reading  pending self-declared
+```
+
+E1 and P1 both carry a "PAN" document and land in the right sections — that is
+the bucket-scoping fix working. Prefill proven by setting a field to a wrong
+value first and watching the swarm overwrite it (COA 50000 → 62400, income
+90000 → 211400).
+
 ---
 
 ## 6. Defects found and fixed during v2
@@ -181,6 +203,9 @@ This also closed a **real pre-existing gap**: `Academics` previously persisted
 | 6 | `institution` defaulted to `ctx.university` — so a Purdue applicant's UG degree read "Purdue University". | `institution` is the *undergraduate* institution, deliberately **not** the destination university. |
 | 7 | Rules-of-hooks violation in `SmartFill` (early `return null` before `useMemo`). | All hooks run unconditionally; guard moved below. |
 | 8 | TS7053 indexing `Record<AgentId, AgentDef>` with `string`. | Typed `durations` as `{agent: AgentId; ms: number}[]`. |
+| 9 | **A co-applicant's PAN prefilled the STUDENT's name.** `extractionContext(app)` had no idea whose document it was building context for, so `contextual.name` was always the applicant. Defect #6 in a new place. | `extractionContext(app, doc)` resolves the owning party from the document's bucket section. Where that party hasn't joined there is no name to read, so it falls back to the placeholder and the screen skips the prefill. |
+| 10 | **The same fix in one place only.** `runExtraction` built its own `extractionContext(app)` — and *that* is what feeds `fieldsFromRun`, so the form kept prefilling the wrong name after #9 was fixed. Two call sites, one fixed. | Passed `doc` at both. Caught only by walking the screen, not by `tsc`. |
+| 11 | **CJ-11 recorded a false discrepancy:** entered "Rajesh Rao", read `"as printed"`, `match: 'fail'`. The reader's own placeholder was compared as if it were a reading. | `declared.ts` treats `as printed` / `—` as no reading. A field the document didn't evidence now goes back to `selfDeclared: true, match: 'pending'` so it stays owed for CJ-28, instead of `selfDeclared: false` where `pendingDeclarations` silently dropped it. |
 
 ---
 
@@ -329,6 +354,52 @@ tab. Wiring only — the corpus itself was written by the parallel session.
   The single `fetch(` in the standalone HTML is Vite's own modulepreload polyfill
   (pre-existing, and dead code in a single-file build).
 
+#### Scope extension — FT Top 50 US MBA schools
+
+The corpus was extended from 14 to **45 dossiers / 139 findings**, adding the FT Top
+50 US MBA schools. The research is the parallel session's; the **wiring** side of
+that extension is:
+
+- **`resolveIntel()`** in `universityCorpus.ts` — the corpus's exact lookup first,
+  then a token-subset match, then nothing. Deliberately not fuzzy string distance.
+  Programme-sensitive, so a business programme can resolve to a different dossier
+  than an engineering one at the same university.
+- **No alias table, on purpose.** Writing out fifty benefactor-to-university pairs
+  would be reproducing the FT Top 50 list — researched data that belongs in the
+  corpus beside its source. Resolution matches structurally against whatever the
+  corpus filed, so the list lives in exactly one place.
+- **`brief.dossier` + `brief.matchedBy`** — the brief records which dossier it was
+  built from and how it was reached. A `token` match renders a `dossier: Michigan`
+  chip and a *"confirm it is the same institution before relying on it"* line,
+  because with business schools in scope the heading legitimately differs from the
+  name on the file.
+- **Resolution diagnostic** at `/__dev/agents` — every distinct university across
+  all 214 applications, resolved twice (business vs engineering programme), with
+  the dossier key and match method. **This exists because a resolution miss is
+  silent**: it renders identically to `coverage: 'absent'`, so without the table a
+  researched dossier could sit in the corpus unreachable while the panel says
+  nobody looked.
+- **14 name-matching guards**, asserted against a fixed table rather than against
+  whatever dossiers exist today — the pairs that matter most are the ones that must
+  **not** match, and those cannot be demonstrated from the live corpus.
+
+Current resolution: **18 of 30** distinct university names, **134 of 214**
+applications. The 12 unresolved names are genuinely absent from the corpus
+(Boston College, IIT Chicago, JHU, NC State, Ohio State, Penn State, Rutgers,
+Texas A&M, UB SUNY, UF, UIUC, UMass Amherst).
+
+**Two decisions left open, deliberately:**
+
+1. **`US_UNIVERSITIES` was NOT extended.** It is still the 14 the pre-qualification
+   screen offers, so an MBA applicant cannot *select* most of the 45 researched
+   schools. Extending it is not wiring: `rank` feeds `overlayFor()`, which sets the
+   **premier overlay and the loan ceiling**. Adding 50 entries with ranks changes
+   how much money people can borrow.
+2. **An FT MBA rank is not a global university rank.** `overlayFor()` expects the
+   latter (MIT = 1). Feeding Wharton's FT rank of 1 into it would be a category
+   error that silently widens a ceiling. If the selectable list does grow, the FT
+   rank needs its own field and its own overlay rule — not a reuse of `rank`.
+
 #### Defects and traps found during Phase E
 
 | # | Finding | State |
@@ -337,6 +408,10 @@ tab. Wiring only — the corpus itself was written by the parallel session.
 | 10 | **The corpus and the bulk seed name different universities.** The corpus keys on `US_UNIVERSITIES` (the 14 the pre-qual screen can select). The bulk seed draws from a wider list, so **10 of APP-2601…2614 resolve to `coverage: 'absent'`** — only Purdue (2605), CMU (2607), NYU (2609) and USC (2612) have a dossier. Journey-created files (APP-2901+) always resolve. | **Open, by design but worth a decision.** Demo on 2605/2607/2609/2612 or on a journey file. Renaming seed universities would fix it but means editing `seed.ts` — forbidden. |
 | 11 | **`audit()` defaults `ts` to `NOW_ISO` — the UN-OFFSET frozen base** (`lib/format.ts:51`), not `nowIso()`. Any audit line written after the operator advances the clock is stamped at the base instant, so a +25h refresh would appear to have happened at 10:00 on the base day — hiding exactly what a reviewer came to see. | Overridden locally (`ts: brief.fetchedAt`). **Every other verb in the store still has this.** Phase D's sanction pack will hit it. |
 | 12 | **`AgentInspector.tsx:207` uses `Date.now()`** in the `LiveRun` plan seed (pre-existing). Presentation only — it reseeds the stagger so a re-run looks different — and it does not touch results, so determinism is unaffected. Flagged because the standing rule is *no `Date.now()` in prototype logic* and a reader will trip over it. | Open, benign. |
+| 14 | **`Penn State University` was resolving to the `Penn` (Wharton) dossier.** Found live in the resolution diagnostic the moment the corpus grew to 45. Both names reduce to a shared `penn` token, and the institution-defining leftover `state` was only being checked inside the place-name branch. A Penn State applicant was being handed Wharton's brief — sourced, plausible, and about the wrong university. | **Fixed.** The institution-token rule is now general, not place-only. Guarded in the checked-in table alongside `Michigan`/`Michigan State` and `Boston University`/`Boston College`. |
+| 15 | **`University of Washington` matched `Washington University`.** Both reduce to `{washington}`; identical place-only token sets were being allowed. Different institutions, opposite sides of the country, and the corpus carries both (`UW`, `WashU`). | **Fixed** — a bare place name never carries a match. The legitimate version goes through the exact lookup on the dossier's own `name`. |
+| 16 | **The brief claimed a parent-university dossier was "the business school for this programme".** The clause was gated on the *programme* being a business programme rather than on the *key* naming a school. Since the corpus files MBA dossiers under the parent short name (`Michigan`, not `Ross`), it described the dossier wrongly — a small lie on a credit surface. | **Fixed** — the clause now requires the matched key to name a school. |
+| 17 | **`Georgia Tech` does not token-match `Georgia Institute of Technology`** — `Tech` and `Technology` are different tokens. Harmless today because the corpus files it as `Georgia Tech`, but it is a real limit of structural matching. | Open, documented in the guard table. **File dossiers under the short key the seed uses.** |
 | 13 | **A full page reload resets the clock offset.** `_offsetHours` is a module global in `lib/clock.ts`, so a browser reload silently returns to +0h. Verifying the re-crawl therefore requires **client-side** navigation (in-app links/tabs); a `location.assign` between advancing the clock and opening the file will make the re-crawl appear not to fire. Cost a false negative during verification. | Open, inherent to the design. **Demo the clock and the brief without reloading.** |
 
 ### Phase F — surfacing, verification, docs
