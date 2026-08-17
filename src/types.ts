@@ -452,6 +452,59 @@ export interface PendingCheckerItem {
   payload?: Record<string, unknown>
 }
 
+// ---- University intelligence (§E) ------------------------------------------
+//
+// What the university-intelligence agent produced for one file. PLAIN DATA
+// ONLY — `mutate()` clones every Application through `structuredClone`, so a
+// function, a `Date`, a `Map` or a class instance placed on here would throw at
+// runtime rather than fail to compile. Strings and numbers, nothing else.
+
+/** One cited source on a brief. A flattened copy of the corpus finding rather
+ *  than a reference into it: the brief is a record of what was said at the time
+ *  it was fetched, and must not silently change when the corpus is revised. */
+export interface UniversityBriefSource {
+  /** The corpus's stable slug, e.g. 'mit-funding-federal-research-down-2026'.
+   *  Safe to persist, which is why it is carried rather than regenerated. */
+  id: string
+  category: 'adverse' | 'policy' | 'funding' | 'leadership' | 'faculty' | 'ranking'
+  categoryLabel: string
+  headline: string
+  detail: string
+  /** The RESEARCHER's severity, carried through rather than re-derived from the
+   *  category. Never 'block' — university news informs a credit view and must
+   *  not, on its own, stop a customer's file. */
+  level: 'info' | 'attention'
+  publisher: string
+  /** When the piece was published — not when it was read. */
+  publishedIso: string
+  url: string
+}
+
+export interface UniversityBrief {
+  university: string
+  programme: string
+  /** The PROTOTYPE-clock instant this crawl was stamped (`lib/clock.nowIso()`).
+   *  Staleness is measured from here — never from wall time, because the demo
+   *  clock is what an operator advances. */
+  fetchedAt: string
+  /** The stamp this brief replaced, so a re-crawl is legible on screen rather
+   *  than merely having happened. Absent on the first fetch. */
+  previousFetchedAt?: string
+  /** 1 on first fetch, +1 on every re-crawl. Makes a refresh countable. */
+  revision: number
+  headline: string
+  /** The synthesis, one line per paragraph. */
+  synthesis: string[]
+  sources: UniversityBriefSource[]
+  /** THREE states, not two. `thin` means the corpus covers this university and
+   *  found it quiet; `absent` means it is not in the corpus at all. An absent
+   *  brief must never be read as a clean bill of health. */
+  coverage: 'adequate' | 'thin' | 'absent'
+  /** The corpus's own explanation of what it looked for and did not find,
+   *  present when coverage is 'thin'. */
+  coverageNote?: string
+}
+
 // ---- The Application -------------------------------------------------------
 export interface Application {
   // header
@@ -516,6 +569,11 @@ export interface Application {
   }
   // committee flag
   committeePath?: boolean
+  /** §E — the university-intelligence brief for this file. OPTIONAL, and it has
+   *  to stay that way: the 14 seed literals in `data/seed.ts` are written
+   *  by hand and must keep compiling untouched. Per-application rather than
+   *  per-university so the 24-hour refresh is per-file. */
+  universityBrief?: UniversityBrief
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'
@@ -689,6 +747,7 @@ export type App360Tab =
   | 'notes'
   | 'peers'
   | 'consents'
+  | 'university'
 
 export interface Toast {
   id: string

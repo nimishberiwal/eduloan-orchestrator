@@ -17,7 +17,7 @@ import { PeerPanel } from './PeerPanel'
 import { ConsentsPanel } from './ConsentsPanel'
 import {
   AuditTab, CommsTab, CovenantsTab, DecisionTab, DocumentsTab, ExtractedTab,
-  IntegrationsTab, NotesTab, TranchesTab, ValidationsTab,
+  IntegrationsTab, NotesTab, TranchesTab, UniversityTab, ValidationsTab,
 } from './tabs'
 
 const TABS: { id: App360Tab; label: string }[] = [
@@ -29,6 +29,7 @@ const TABS: { id: App360Tab; label: string }[] = [
   { id: 'tranches', label: 'Tranches' },
   { id: 'comms', label: 'Comms' },
   { id: 'integrations', label: 'Integrations' },
+  { id: 'university', label: 'University brief' },
   { id: 'consents', label: 'Consents' },
   { id: 'peers', label: 'Peers' },
   { id: 'audit', label: 'Audit' },
@@ -117,6 +118,7 @@ function TabContent({ app, tab }: { app: Application; tab: App360Tab }) {
     case 'tranches': return <TranchesTab app={app} />
     case 'comms': return <CommsTab app={app} />
     case 'integrations': return <IntegrationsTab app={app} />
+    case 'university': return <UniversityTab app={app} />
     case 'consents': return <ConsentsPanel app={app} />
     case 'peers': return <PeerPanel app={app} />
     case 'audit': return <AuditTab app={app} />

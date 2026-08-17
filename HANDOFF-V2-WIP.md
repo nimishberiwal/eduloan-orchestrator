@@ -45,12 +45,12 @@ Six requested developments. Progress:
 
 | # | Development | State |
 |---|---|---|
-| 1 | Upload-instead-of-typing + parallel-agent processing view | **Built**, wired into **1 of 6** screens |
+| 1 | Upload-instead-of-typing + parallel-agent processing view | **Built and wired into all 6 screens** |
 | 2 | Three agents per upload (extraction · fraud · validation) | **Built and verified** |
 | 3 | Skip → self-declared → post-decision mandatory upload w/ cross-validation | **Core built**; screen + gate **not built** |
 | 4 | Sanction-time CAM + letter + extras by parallel agents | **Not started** |
 | 5 | Pre-sanction customer message drafting agent | **Not started** |
-| 6 | University news crawler agent with source links | **Not started** |
+| 6 | University news crawler agent with source links | **Built and verified** (Phase E — see §7) |
 
 ---
 
@@ -186,23 +186,39 @@ This also closed a **real pre-existing gap**: `Academics` previously persisted
 
 ## 7. Next steps, in order
 
-### Phase B remainder — 5 screens (mechanical, pattern proven)
+### Phase B remainder — 5 screens — **DONE**
 
-Follow `Academics` in `src/journeys/customer/Details.tsx` exactly.
+All five wired and walked live end to end on APP-2901. Verified state below.
 
-| Screen | Backing document | Bucket |
-|---|---|---|
-| CJ-08 Profile | `PAN` | E1 |
-| CJ-10 Admission | `I-20 (USA F-1) with SEVIS ID` | E5 |
-| CJ-05 Cost | `University COA per academic year` | E6 |
-| CJ-06 Parent snapshot | `3 payslips` | P2 |
-| CJ-11 Add parent | `PAN` (co-applicant) | P1 |
+| Screen | Backing document | Bucket | Declares |
+|---|---|---|---|
+| CJ-08 Profile | `PAN` | E1 | name · dob · PAN |
+| CJ-10 Admission | `I-20 (USA F-1) with SEVIS ID` | E5 | SEVIS ID |
+| CJ-05 Cost | `University COA per academic year` | E6 | cost per year — **evidenced only** |
+| CJ-06 Parent snapshot | `3 payslips` | P2 | monthly income — **evidenced only** |
+| CJ-11 Add parent | `PAN` (co-applicant) | P1 | parent's name |
 
-Each needs, in this order:
-1. `const *_DOC = /…/i` regex over the checklist label
-2. `useDeclaration(app, { section, group, backingMatch })`
-3. `<SmartFill>` with `onExtracted` prefill handlers and `onComplete={declare.onSwarmComplete}`
-4. `declare.commit([...])` on submit — **with `fromKey` on every field** (defect #4)
+Three decisions worth knowing before extending this:
+
+1. **`backingBucket` is now required wherever the label repeats.** "PAN" is a
+   document in BOTH E1 and P1, and `SmartFill`'s "first match wins" handed the
+   parent's screen the student's PAN. `SmartFillProps.bucket` and
+   `DeclarationSpec.backingBucket` scope the lookup. Same silent-mis-lookup
+   family as `fromKey` — nothing errors, the wrong paper is simply recorded.
+2. **CJ-05 and CJ-06 commit only when evidenced.** Both screens invite an
+   estimate in their own intro copy ("estimates are fine for now", "rough
+   figures are fine"). A self-declared field becomes a condition of
+   disbursement once the Phase C gate lands, and a 1% tolerance against the real
+   COA would turn an invited guess into a payment blocker. A figure actually
+   read off the document is a fact and is kept.
+3. **Only fields the backing document can evidence are declared.** CJ-08's
+   address is on the Aadhaar, not the PAN; CJ-10's test scores are on the
+   scorecards, not the I-20; CJ-11's relationship is on the relationship proof.
+   Declaring those would create obligations CJ-28 could never discharge.
+
+**Still unwired:** the scorecard shapes added in Phase A (GRE/GMAT/LSAT/IELTS-TOEFL)
+have no `SmartFill` on CJ-10 — that screen asks for five scores and only the
+I-20 is offered. A second `SmartFill` scoped to E4 would close it.
 
 ### Phase C remainder
 
@@ -240,27 +256,88 @@ by the user**, so the full set is:
   of `POLICY.sanctionValidityDays`; hardcoded owning officer `'S. Kulkarni'`; inlined
   sanction-issued comm body, which drops the `validity` token its own template carries.
 
-### Phase E — university intelligence (item 6)
+### Phase E — university intelligence (item 6) — **BUILT AND VERIFIED**
 
 User's answer, verbatim: *"Combination of 1 and 3. We create a database of the
 research we do, but with every application on a 24-hour basis, we do a live fetch to
 update data."*
 
-- `src/data/universityIntel.ts` — a corpus built by **actually researching all 14
-  selectable universities**: funding, leadership changes, faculty moves, ranking
-  shifts, campus/immigration policy, adverse coverage. Every finding carries a **real
-  source URL, publisher and date**. Where a university yields thin results, say so in
-  the corpus rather than pad it.
-- `lib/agents/university.ts` — selects findings relevant to the programme,
-  synthesises, stamps `fetchedAt`.
-- **24-hour refresh**: a brief older than 24h against the prototype clock is stale;
-  opening the file re-runs the crawl and re-stamps. Advancing the demo clock +25h
-  visibly triggers a re-crawl. Staleness detection and re-crawl are real and observable.
-- New optional `app.universityBrief` (per-application, so refresh is per-file).
-- **State plainly:** the *fetch* is modelled, not live — zero network calls is a
-  design constraint and the standalone HTML must work offline. A real crawl needs the
-  backend `docs/API-CONTRACT.md` describes. **Add the endpoint to that contract** so
-  the seam is documented.
+**State: complete.** `tsc --noEmit` clean · `npm run build` clean · standalone build
+clean (0.83 MB, self-contained) · walked live on `/__dev/agents` and the new App-360
+tab. Wiring only — the corpus itself was written by the parallel session.
+
+#### What was built
+
+| Lines | File | What |
+|---:|---|---|
+| ~110 | `src/lib/agents/universityCorpus.ts` | **New.** Selection over the corpus: `CATEGORY_RANK`/`CATEGORY_LABEL`, `coverageFor`, `matchesProgramme`, `selectFindings`, `allFindings`. Pure — no clock, store or network. |
+| ~250 | `src/lib/agents/university.ts` | **New.** `runUniversitySwarm` / `runUniversityIntel` / `buildBrief` / `briefFromRun`, plus `BRIEF_TTL_HOURS`, `briefIsStale`, `briefStaleness`, `briefAgeHours`. |
+| — | `src/types.ts` | `UniversityBrief` + `UniversityBriefSource`; **optional** `app.universityBrief`; `'university'` added to `App360Tab`. |
+| — | `src/store/appStore.ts` | New verb `recordUniversityBrief(appId, brief, actor, note?)` → `UNIVERSITY BRIEF RECORDED` / `UNIVERSITY BRIEF REFRESHED`. |
+| ~180 | `src/components/App360/tabs.tsx` | New `UniversityTab` — provenance band, coverage chip, synthesis, one card per source with publisher, date and clickable URL. |
+| — | `src/components/App360/App360.tsx` | Tab in the strip at `:25`, case at `:113`. |
+| ~230 | `src/journeys/dev/AgentInspector.tsx` | `UniversitySection` — determinism, customer-leak, 24h-boundary and never-blocking assertions across 31 rows. |
+| — | `docs/API-CONTRACT.md` | New **§8 University intelligence** — endpoints, server-owned TTL, bank-only refusal rule, webhook. |
+
+#### Design decisions worth knowing
+
+- **Coverage is THREE states, not two.** `adequate` (researched, findings on file),
+  `thin` (researched and genuinely quiet — the corpus says so and carries a `note`),
+  `absent` (**not in the corpus at all**). `absent` is the dangerous one: an empty
+  panel reads as a clean bill of health, so it renders an amber banner saying
+  *"absent, not clean — nobody has looked"*.
+- **The researcher's `level` is carried through, never re-derived.** The corpus
+  assigns each finding `'info' | 'attention'` with the source in front of it. The
+  agent selects, orders and synthesises; it does not re-judge severity.
+- **Nothing is ever `'block'`.** Asserted in the harness, not merely documented. A
+  newspaper must not be able to stop a customer's file.
+- **The brief is a flattened COPY of the corpus finding**, not a reference into it —
+  a brief records what was said when it was fetched, so revising the corpus must not
+  silently rewrite briefs already on file. It carries the corpus's stable slug `id`.
+- **`AgentFinding.ref` was deliberately NOT widened** to carry a URL. Its union is
+  `document | validation | field | party`; adding a URL kind would let any finding
+  smuggle a link into surfaces not built to show one. The URL travels on the brief.
+- **The store verb is idempotent on `fetchedAt`.** The panel re-crawls on mount when
+  stale; without the guard, clicking between tabs would write an audit line each time
+  and the trail would stop meaning *"the crawl ran"* and start meaning *"somebody
+  looked"*.
+
+#### Verified live
+
+- `/__dev/agents` → **31 rows** (14 seeded + 14 one-per-selectable-university
+  synthetic + 3 MIT-with-varying-programme): determinism identical across two runs on
+  all 31 · 0 customer lanes · 0 customer-audience findings · 0 brief strings in the
+  customer projection · 0 blocking findings · fresh at +23h and stale at +25h on every
+  row.
+- **Customer-leak assertion** serialises `tasksFor()` + `customerFacingStatus()`
+  against an application that *has* a brief attached — the only state in which a leak
+  is possible — and searches for every publisher, source title, URL, synthesis line
+  and category label. University and programme names are excluded on purpose: those
+  are the customer's own facts. This is the runtime equivalent of the ad-hoc route
+  scanner and is stronger for the brief specifically.
+- **App-360 → University brief on APP-2612 (USC, 5 sources):** renders all five with
+  category chip, attention chip, publisher, real date and clickable source URL.
+- **Programme narrowing observable:** MIT on `MS Computer Science` → 4 sources, 0 set
+  aside; on `MBA` / `MPH` → 3 sources, **1 set aside** (the graduate-intake finding is
+  tagged to the taught MS/MEng courses).
+- **Re-crawl fires and is legible.** Rev 1 at base → advance clock → rev **2**,
+  `re-crawled — previous stamp 20-Jul-2026 15:30` printed beside the new stamp, and a
+  fresh `UNIVERSITY BRIEF REFRESHED … previous stamp … (48h earlier)` line on the
+  Audit tab **stamped at the advanced time**. Confirmed at both **+24h (the exact
+  boundary)** and **+48h**.
+- **Zero network calls.** No `fetch(`/`XMLHttpRequest`/`WebSocket` anywhere in `src/`.
+  The single `fetch(` in the standalone HTML is Vite's own modulepreload polyfill
+  (pre-existing, and dead code in a single-file build).
+
+#### Defects and traps found during Phase E
+
+| # | Finding | State |
+|---|---|---|
+| 9 | **`src/data/universityIntel.ts` did not exist when Phase E started** — repo clean, no stash, nothing on disk. Phase E was built against a placeholder stub at a *separate* path (`universityIntel.stub.ts`) so it could not collide with the parallel session's file. The real corpus landed mid-build; the wiring was rewired to it and the stub deleted. | Resolved. **This tree is shared by two live sessions** — `git status` changed under me during the build. Check it before assuming a file is missing. |
+| 10 | **The corpus and the bulk seed name different universities.** The corpus keys on `US_UNIVERSITIES` (the 14 the pre-qual screen can select). The bulk seed draws from a wider list, so **10 of APP-2601…2614 resolve to `coverage: 'absent'`** — only Purdue (2605), CMU (2607), NYU (2609) and USC (2612) have a dossier. Journey-created files (APP-2901+) always resolve. | **Open, by design but worth a decision.** Demo on 2605/2607/2609/2612 or on a journey file. Renaming seed universities would fix it but means editing `seed.ts` — forbidden. |
+| 11 | **`audit()` defaults `ts` to `NOW_ISO` — the UN-OFFSET frozen base** (`lib/format.ts:51`), not `nowIso()`. Any audit line written after the operator advances the clock is stamped at the base instant, so a +25h refresh would appear to have happened at 10:00 on the base day — hiding exactly what a reviewer came to see. | Overridden locally (`ts: brief.fetchedAt`). **Every other verb in the store still has this.** Phase D's sanction pack will hit it. |
+| 12 | **`AgentInspector.tsx:207` uses `Date.now()`** in the `LiveRun` plan seed (pre-existing). Presentation only — it reseeds the stagger so a re-run looks different — and it does not touch results, so determinism is unaffected. Flagged because the standing rule is *no `Date.now()` in prototype logic* and a reader will trip over it. | Open, benign. |
+| 13 | **A full page reload resets the clock offset.** `_offsetHours` is a module global in `lib/clock.ts`, so a browser reload silently returns to +0h. Verifying the re-crawl therefore requires **client-side** navigation (in-app links/tabs); a `location.assign` between advancing the clock and opening the file will make the re-crawl appear not to fire. Cost a false negative during verification. | Open, inherent to the design. **Demo the clock and the brief without reloading.** |
 
 ### Phase F — surfacing, verification, docs
 

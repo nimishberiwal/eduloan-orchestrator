@@ -173,6 +173,62 @@ names the officer who issued the link. An assisted entry is `kind: "rm"` with
 `onBehalfOf`. These three cases must stay distinguishable in the audit trail —
 collapsing them is how "the customer consented" becomes unprovable.
 
+## 8. University intelligence
+
+```
+GET  /v1/applications/:id/university-brief
+  → { brief } | 404 when never crawled
+
+POST /v1/applications/:id/university-brief/crawl
+  Idempotency-Key: UNIVERSITY_CRAWL:APP-2901:2026-07-21T11:00:00.000Z
+  { university, universityShort, programme }
+  → { brief, refreshed: boolean }
+```
+
+**The fetch is modelled in this build, not live.** There is no crawler, no HTTP
+client and no mock pretending to be one: `lib/agents/university.ts` selects from
+a researched corpus in `src/data/universityIntel.ts` and stamps the prototype
+clock. That is not a shortcut taken under time pressure — **zero network calls is
+a design constraint of this prototype, and the standalone HTML build must work
+offline**, which a live crawl cannot. A real crawl therefore needs this endpoint;
+the front end's half of the conversation is already the shape above.
+
+### The server owns the 24-hour cycle
+
+The prototype treats a brief older than **24 hours** as stale and re-crawls when
+the file is opened. In production the *server* owns that TTL, for the same reason
+it owns the task projection (§0): a client-side clock means two officers looking
+at the same file can disagree about whether the brief in front of them is
+current, and "the brief was fresh when I approved it" stops being provable.
+
+`GET` returns whatever is on file and never crawls. `POST /crawl` is the only
+thing that fetches, and it returns `refreshed: false` with the existing brief
+when the TTL has not elapsed — so a client that opens a file ten times causes one
+crawl, not ten. The `Idempotency-Key` carries the **TTL window**, not the
+wall-clock instant; keying on the instant would make every request unique and
+defeat the collapse.
+
+### The brief is bank-only
+
+It weighs funding cuts, leadership churn and adverse coverage about the
+institution the customer is about to attend. Both endpoints must be refused to a
+customer-scoped session token (§1) and to a handoff token (§5) — not filtered
+down to a safe subset, refused. There is no customer-facing projection of a
+university brief, and inventing one is not a small change.
+
+This is the same rule as fraud findings, one level up: the prototype expresses it
+as `FindingAudience = 'bank'` in the type system, and `/__dev/agents` asserts the
+brief reaches no customer route.
+
+### Webhook
+
+| Event | Fires when |
+|---|---|
+| `university.brief_refreshed` | A crawl produced a brief that differs from the one on file |
+
+It fires on a **material change**, not on every TTL tick — otherwise every file
+emits one a day and the channel becomes noise nobody reads.
+
 ---
 
 ## Not in this contract

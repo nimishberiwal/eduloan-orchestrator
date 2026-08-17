@@ -24,7 +24,7 @@ import type {
   AuditRole, AutomationEvent, ClosureKind, ConsentType, EscalationEvent, StageRule,
 } from '@/types'
 import type { HitlStatus, HitlTrigger } from '@/types'
-import type { ExtractedField, PartyRole } from '@/types'
+import type { ExtractedField, PartyRole, UniversityBrief } from '@/types'
 import type { HitlDecisions } from '@/lib/hitl'
 import type { JourneyActor, JourneyEvent } from '@/types/journeys'
 import {
@@ -232,6 +232,16 @@ interface Actions {
   recordDeclaredFields: (
     appId: string,
     fields: ExtractedField[],
+    actor: JourneyActor,
+    note?: string,
+  ) => void
+  /** §E — persist a university-intelligence brief produced by the crawl agent.
+   *  Idempotent on `fetchedAt`: re-running the crawl in the same clock state
+   *  produces the same stamp and is a no-op, so opening a file repeatedly does
+   *  not pile up audit lines. */
+  recordUniversityBrief: (
+    appId: string,
+    brief: UniversityBrief,
     actor: JourneyActor,
     note?: string,
   ) => void
@@ -1443,6 +1453,48 @@ export const useStore = create<State & Actions>((set, get) => ({
         }${actorSuffix(actor)}`,
       })
       app.lastCustomerActivityAt = nowIso()
+      return true
+    })
+  },
+
+  recordUniversityBrief: (appId, brief, actor, note) => {
+    mutate(set, appId, (app) => {
+      // Idempotent on the stamp. The panel re-runs the crawl whenever it mounts
+      // against a stale brief; without this guard a reviewer clicking between
+      // tabs would write an audit line each time, and the audit trail would stop
+      // meaning "the crawl ran again" and start meaning "somebody looked".
+      if (app.universityBrief?.fetchedAt === brief.fetchedAt) return false
+
+      const previous = app.universityBrief
+      app.universityBrief = brief
+
+      const adverse = brief.sources.filter((s) => s.category === 'adverse').length
+      audit(app, {
+        // `audit()` defaults `ts` to NOW_ISO — the UN-OFFSET frozen base, kept
+        // that way for seed construction. Overridden here deliberately: the
+        // point of this line is that the crawl re-ran after the operator
+        // advanced the clock, and a row stamped 10:00 on the base day would
+        // hide exactly the thing a reviewer came to see.
+        ts: brief.fetchedAt,
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        // The verb distinguishes the first crawl from a refresh, because the
+        // thing worth being able to see in the trail is that the 24-hour cycle
+        // actually fired — not merely that a brief exists.
+        verb: previous ? 'UNIVERSITY BRIEF REFRESHED' : 'UNIVERSITY BRIEF RECORDED',
+        remarks: `${note ? `${note} — ` : ''}${brief.university} · revision ${
+          brief.revision
+        } · ${brief.sources.length} source(s)${
+          adverse ? `, ${adverse} adverse` : ''
+        } · corpus ${brief.coverage}${
+          previous
+            ? ` · previous stamp ${previous.fetchedAt} (${Math.round(
+                (new Date(brief.fetchedAt).getTime() - new Date(previous.fetchedAt).getTime()) /
+                  3_600_000,
+              )}h earlier)`
+            : ''
+        }${actorSuffix(actor)}`,
+      })
       return true
     })
   },

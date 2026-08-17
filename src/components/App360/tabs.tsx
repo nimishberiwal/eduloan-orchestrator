@@ -1,9 +1,9 @@
 // ============================================================================
 // Application 360 tab-strip content (§12.3.4)
 // ============================================================================
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle, RefreshCw, Send, ShieldCheck, UserPlus,
+  AlertTriangle, ExternalLink, RefreshCw, Send, ShieldCheck, UserPlus,
 } from 'lucide-react'
 import { useStore, addNote } from '@/store/appStore'
 import { SECTION_LABEL, SECTION_ORDER, bucketStatus } from '@/data/buckets'
@@ -18,6 +18,8 @@ import { CommThread } from '@/components/CRM/CommThread'
 import { MODE_LABEL, MODE_TONE, SOURCE_BY_SYSTEM, sourceLabel } from '@/data/sources'
 import { consentProgress, isBlockedOnConsent, sourcingMix } from '@/lib/sourcing'
 import { ambiguityReason } from '@/data/classification'
+import { briefFromRun, runUniversitySwarm } from '@/lib/agents/university'
+import { BRIEF_TTL_HOURS, briefStaleness } from '@/lib/agents/university'
 
 // ---- Documents -------------------------------------------------------------
 export function DocumentsTab({ app }: { app: Application }) {
@@ -694,6 +696,186 @@ export function NotesTab({ app }: { app: Application }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ---- University intelligence (§E) ------------------------------------------
+//
+// Bank-facing, and only bank-facing. There is no customer counterpart to this
+// panel: a brief weighs funding cuts, leadership churn and adverse coverage
+// about the institution the customer is about to attend, which is credit work.
+// `/__dev/agents` asserts that the brief reaches no customer route.
+//
+// The 24-hour cycle is real. Opening this tab against a brief older than 24h on
+// the PROTOTYPE clock re-runs the crawl and re-stamps it — so advancing the demo
+// clock (+48h from Automation) and coming back here fires a visible re-crawl:
+// the revision counter increments, the previous stamp is printed next to the new
+// one, and a fresh `UNIVERSITY BRIEF REFRESHED` line lands in the Audit tab
+// stamped at the advanced time.
+export function UniversityTab({ app }: { app: Application }) {
+  const record = useStore((s) => s.recordUniversityBrief)
+  // Subscribing to the operator clock offset is what makes staleness re-derive.
+  // The prototype clock never ages on its own, so without this the panel would
+  // never notice it had gone stale.
+  const offset = useStore((s) => s.clockOffsetHours)
+
+  const brief = app.universityBrief
+  const stale = useMemo(() => briefStaleness(brief), [brief, offset])
+
+  useEffect(() => {
+    if (!stale.stale) return
+    // Computed synchronously and completely, up front — the same rule the
+    // document swarm follows. Nothing here is waiting on a timer.
+    const fresh = briefFromRun(runUniversitySwarm(app))
+    if (fresh) {
+      record(app.appId, fresh, { kind: 'system', sessionId: 'SYS' }, 'file opened')
+    }
+    // The store verb is idempotent on `fetchedAt`, and a successful write makes
+    // `stale.stale` false, so this converges in one pass and cannot loop.
+  }, [app, stale.stale, record, offset])
+
+  if (!brief) {
+    return <EmptyState>Running the university crawl…</EmptyState>
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Provenance band — the crawl's own vital signs. */}
+      <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            University brief
+          </span>
+          <span className="text-13 font-semibold text-slate-800">{brief.university}</span>
+          <span className="text-11 text-slate-500">read against {brief.programme}</span>
+          <span className="ml-auto flex items-center gap-1.5">
+            <Chip
+              tone={brief.coverage === 'adequate' ? 'green' : 'amber'}
+              title={
+                brief.coverage === 'adequate'
+                  ? 'Researched, with findings on file'
+                  : brief.coverage === 'thin'
+                    ? 'Researched and genuinely quiet'
+                    : 'Not in the corpus — nobody has looked'
+              }
+            >
+              corpus: {brief.coverage}
+            </Chip>
+            <Chip tone="slate">revision {brief.revision}</Chip>
+            {stale.stale ? (
+              <Chip tone="amber" title={`Older than ${BRIEF_TTL_HOURS}h — a re-crawl is due`}>
+                stale
+              </Chip>
+            ) : (
+              <Chip tone="green" title={`Goes stale in ${Math.round(stale.dueInHours)}h`}>
+                current
+              </Chip>
+            )}
+          </span>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <span>
+            fetched <b className="font-medium text-slate-700">{fmtDateTime(brief.fetchedAt)}</b>
+            {' · '}
+            {stale.ageHours < 1
+              ? 'just now'
+              : `${Math.round(stale.ageHours)}h ago`}{' '}
+            on the prototype clock
+          </span>
+          {/* The proof that a re-crawl happened, rather than a claim that it did. */}
+          {brief.previousFetchedAt && (
+            <span className="rounded bg-slate-50 px-1.5 py-0.5">
+              re-crawled — previous stamp {fmtDateTime(brief.previousFetchedAt)}
+            </span>
+          )}
+          {offset > 0 && <span className="font-medium text-brand-600">clock +{offset}h</span>}
+          <span className="ml-auto">
+            refreshes every {BRIEF_TTL_HOURS}h · {brief.sources.length} source(s)
+          </span>
+        </div>
+      </div>
+
+      {/* "Absent" is the dangerous state: an empty panel looks like a clean
+          result, and it is not one. Say so on the surface, not in a comment. */}
+      {brief.coverage === 'absent' && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-[12px] text-amber-900">
+          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="font-semibold">No dossier for this university — absent, not clean</div>
+            <div className="mt-0.5 text-amber-800">
+              The research corpus covers the 14 universities the pre-qualification screen can
+              select. <b>{brief.university}</b> is not among them, so nobody has looked. Do not
+              read this panel as a clear result.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Synthesis */}
+      <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+        <div className="text-13 font-semibold text-slate-800">{brief.headline}</div>
+        <div className="mt-1.5 space-y-1.5">
+          {brief.synthesis.map((line, i) => (
+            <p key={i} className="text-[12px] leading-relaxed text-slate-600">
+              {line}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      {/* Sources — publisher, date and a clickable link on every one. A finding
+          a reviewer cannot click through to is an assertion, not a source. */}
+      {brief.sources.length === 0 ? (
+        <EmptyState>
+          {brief.coverage === 'thin'
+            ? brief.coverageNote ?? 'The corpus covers this university and had nothing recent worth reporting.'
+            : brief.coverage === 'absent'
+              ? 'No dossier for this university.'
+              : `Nothing on file for ${brief.university} touches ${brief.programme}.`}
+        </EmptyState>
+      ) : (
+        <div className="space-y-1.5">
+          {brief.sources.map((s) => (
+            <div
+              key={s.id}
+              className="rounded-xl border border-[var(--line)] bg-white p-2.5 shadow-card"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip tone={s.category === 'adverse' ? 'red' : s.category === 'policy' ? 'amber' : 'slate'}>
+                  {s.categoryLabel}
+                </Chip>
+                {s.level === 'attention' && <Chip tone="amber">attention</Chip>}
+                <span className="text-[12px] font-medium text-slate-800">{s.headline}</span>
+              </div>
+              <p className="mt-1 text-[12px] leading-relaxed text-slate-600">{s.detail}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                <span className="font-medium text-slate-600">{s.publisher}</span>
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-500">{fmtDate(s.publishedIso)}</span>
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex max-w-full items-center gap-1 truncate font-medium text-brand-600 underline decoration-brand-200 hover:text-brand-700"
+                  title={s.url}
+                >
+                  <ExternalLink size={11} className="flex-shrink-0" /> {s.url}
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-slate-400">
+        The fetch is <b>modelled, not live</b>. This build makes zero network calls by design and
+        the standalone HTML has to work offline, so a crawl here means selecting from a researched
+        corpus and stamping the prototype clock. The endpoint a real crawl needs is written down in{' '}
+        <code>docs/API-CONTRACT.md §8</code>. Re-running in the same clock state is deliberately a
+        no-op — the brief is a pure function of the file, so the same inputs give the same stamp.
+      </p>
     </div>
   )
 }
