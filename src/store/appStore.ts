@@ -33,7 +33,12 @@ import {
   type NewApplicationSpec,
 } from '@/journeys/newApplication'
 import { runJourneyResets } from '@/journeys/resetRegistry'
-import { mergeFields } from '@/lib/declared'
+import { gatesFor, mergeFields, verifyDeclared } from '@/lib/declared'
+import { docsFromRun, draftsFromRun, runSanctionSwarm } from '@/lib/agents/sanction'
+import { POLICY } from '@/data/policy'
+import type { AgentResults } from '@/lib/agents/types'
+import type { FraudOutput, ValidationOutput } from '@/lib/agents/documents'
+import { hasBlocking } from '@/lib/agents/runtime'
 import { CONSENT_BY_TYPE } from '@/data/consents'
 import { HITL_BY_TRIGGER } from '@/data/hitl'
 import { classifyDoc } from '@/data/classification'
@@ -46,7 +51,7 @@ import { generateBucketsForParty, materialiseDoc, resetDocSeq } from '@/data/buc
 import { RULE_CATALOGUE } from '@/data/rules'
 import { firedKey, sweepRules } from '@/lib/rules'
 import { escalationTarget, rungFor, sweepEscalations } from '@/lib/escalation'
-import { OFFICER_BY_ID, officersOf } from '@/data/org'
+import { OFFICER_BY_ID, PRIMARY_OFFICER, officersOf } from '@/data/org'
 import { COMM_TEMPLATE_BY_ID } from '@/data/comms'
 import { CODE_LABEL } from '@/data/reasonCodes'
 import { buildSeed, SAVED_FILTERS } from '@/data/seed'
@@ -244,6 +249,30 @@ interface Actions {
     brief: UniversityBrief,
     actor: JourneyActor,
     note?: string,
+  ) => void
+  /** §v5 — lands a settled document swarm on the file. The validation agent's
+   *  results go onto `app.validations`, which is what `evaluateGate` reads, so
+   *  a rule the agent failed genuinely holds the stage. The audit line
+   *  distinguishes a BLOCK-severity finding from a warning. */
+  recordAgentFindings: (
+    appId: string,
+    docId: string,
+    results: AgentResults,
+    actor: JourneyActor,
+  ) => void
+  /** §Phase D item 5 — an officer approves one outreach draft, which sends it.
+   *  Nothing the outreach agent writes leaves the bank without this call. */
+  approveOutreachDraft: (appId: string, commId: string) => void
+  discardOutreachDraft: (appId: string, commId: string) => void
+  /** §v5 CJ-28 — re-check one already-recorded declaration group against a
+   *  freshly read document. `groupKey` is `${section}|${group}`. Never touches
+   *  `enteredValue`: the typed value is the thing being verified. */
+  verifyDeclaredFields: (
+    appId: string,
+    groupKey: string,
+    extracted: Record<string, string>,
+    docId: string,
+    actor: JourneyActor,
   ) => void
 }
 
@@ -1168,12 +1197,74 @@ export const useStore = create<State & Actions>((set, get) => ({
         app.status = 'in_progress'
         app.stageEnteredAt = NOW_ISO
         app.sanctionDate = NOW_ISO
-        app.sanctionExpiryDate = plusDays(NOW_ISO, 180)
-        app.owner = { department: 'Credit', officer: 'S. Kulkarni' }
+        // POLICY, not a literal 180. The number appeared three times in this
+        // block — the expiry date, the audit remark and the customer's letter —
+        // and a committee editing `sanctionValidityDays` would have moved one
+        // of the three.
+        app.sanctionExpiryDate = plusDays(NOW_ISO, POLICY.sanctionValidityDays)
+        // The owning Credit officer comes from the org model. It was hardcoded
+        // to 'S. Kulkarni', which is who PRIMARY_OFFICER.Credit happens to be —
+        // so the file silently disagreed with the org chart the moment anyone
+        // edited data/org.ts.
+        app.owner = { department: 'Credit', officer: PRIMARY_OFFICER.Credit.name }
         app.stageHistory = [...app.stageHistory, { stage: 'S11', enteredAt: NOW_ISO }]
-        audit(app, { actor: officerOf(role), role, verb: 'SANCTION ISSUED', toStage: 'S11', remarks: 'Validity clock started (180d)' })
+        audit(app, {
+          actor: officerOf(role),
+          role,
+          verb: 'SANCTION ISSUED',
+          toStage: 'S11',
+          remarks: `Validity clock started (${POLICY.sanctionValidityDays}d)`,
+        })
+
+        // §Phase D — the sanction pack. Seven agents, computed completely and
+        // synchronously here: the results are a pure function of the file, and
+        // only the REVEAL is ever on a timer (§2).
+        const pack = runSanctionSwarm(app, NOW_ISO)
+        app.generatedDocs = docsFromRun(pack)
+
+        // The outreach agent WRITES; it does not send. Each draft is inert
+        // until an officer approves it, which is the whole point of item 5 —
+        // an agent that could message a customer about their own sanction
+        // without a person reading it first is not a feature.
+        const drafts: CommEvent[] = draftsFromRun(pack).map((d) => ({
+          id: uid('C'),
+          ts: NOW_ISO,
+          channel: d.channel,
+          templateId: 'sanction_outreach_draft',
+          subject: d.subject,
+          body: d.body,
+          auto: false,
+          direction: 'outbound',
+          status: 'draft',
+          actor: 'Agent',
+          role,
+        }))
+
+        audit(app, {
+          actor: 'Agent',
+          role,
+          verb: 'SANCTION PACK GENERATED',
+          remarks: `${app.generatedDocs.length} paper(s) produced · ${drafts.length} message(s) drafted, none sent`,
+        })
+
         app.comms = [
-          { id: uid('C'), ts: NOW_ISO, channel: 'Email', templateId: 'sanction_issued', subject: 'Sanction letter issued', body: `Congratulations ${app.studentName}! Your loan is sanctioned.`, auto: true },
+          ...drafts,
+          // The template owns the wording. This body was inlined and dropped
+          // the `validity` token the template itself interpolates, so the
+          // customer's email omitted the one date the letter turns on.
+          {
+            id: uid('C'),
+            ts: NOW_ISO,
+            channel: 'Email',
+            templateId: 'sanction_issued',
+            subject: 'Sanction letter issued',
+            body:
+              COMM_TEMPLATE_BY_ID['sanction_issued']?.render({
+                student: app.studentName,
+                validity: new Date(app.sanctionExpiryDate).toDateString(),
+              }) ?? `Your loan is sanctioned.`,
+            auto: true,
+          },
           ...app.comms,
         ]
       }
@@ -1187,7 +1278,10 @@ export const useStore = create<State & Actions>((set, get) => ({
     mutate(set, appId, (app) => {
       const t = app.tranches.find((x) => x.id === trancheId)
       if (!t) return false
-      const gatesOk = t.gates.every((g) => g.passed)
+      // `gatesFor` — tranche 1 also carries the derived declaration gate, so a
+      // file with self-declared facts still unevidenced cannot be released even
+      // though it sanctioned and signed normally.
+      const gatesOk = gatesFor(app, t).every((g) => g.passed)
       if (!gatesOk) {
         pushToast('error', `Tranche ${t.n} has failing gates — cannot release.`)
         return false
@@ -1433,6 +1527,118 @@ export const useStore = create<State & Actions>((set, get) => ({
       return true
     })
     pushToast('info', 'Tranche request queued for the bank. Release stays a bank action.')
+  },
+
+  approveOutreachDraft: (appId, commId) => {
+    const { role, pushToast } = get()
+    mutate(set, appId, (app) => {
+      const draft = app.comms.find((c) => c.id === commId)
+      if (!draft || draft.status !== 'draft') {
+        pushToast('info', 'That message is not a draft.')
+        return false
+      }
+      // The draft BECOMES the sent message rather than spawning a copy, so the
+      // thread shows one message with a history, not a ghost draft beside a
+      // near-identical send.
+      draft.status = draft.channel === 'Email' ? 'delivered' : 'sent'
+      draft.actor = officerOf(role)
+      draft.role = role
+      draft.auto = false
+      audit(app, {
+        actor: officerOf(role),
+        role,
+        verb: 'OUTREACH APPROVED',
+        remarks: `${draft.channel} — "${draft.subject}" approved by an officer and sent`,
+      })
+      return true
+    })
+    pushToast('success', 'Message approved and sent.')
+  },
+
+  discardOutreachDraft: (appId, commId) => {
+    const { role, pushToast } = get()
+    mutate(set, appId, (app) => {
+      const draft = app.comms.find((c) => c.id === commId)
+      if (!draft || draft.status !== 'draft') return false
+      app.comms = app.comms.filter((c) => c.id !== commId)
+      audit(app, {
+        actor: officerOf(role),
+        role,
+        verb: 'OUTREACH DISCARDED',
+        remarks: `${draft.channel} — "${draft.subject}" discarded unsent`,
+      })
+      return true
+    })
+    pushToast('info', 'Draft discarded.')
+  },
+
+  verifyDeclaredFields: (appId, groupKey, extracted, docId, actor) => {
+    mutate(set, appId, (app) => {
+      const [section, group] = groupKey.split('|')
+      const target = app.extracted.filter(
+        (f) => f.section === section && f.group === group && f.backingDocIds !== undefined,
+      )
+      if (target.length === 0) return false
+
+      const verified = verifyDeclared(target, extracted, docId)
+      app.extracted = mergeFields(app.extracted, verified)
+
+      const checked = verified.filter((f) => f.match === 'pass').length
+      const clashed = verified.filter((f) => f.match === 'fail').length
+      const stillOwed = verified.filter((f) => f.match === 'pending').length
+
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        // A contradiction is not a successful verification and the audit trail
+        // should not read as though it were.
+        verb: clashed > 0 ? 'DECLARATION CONTRADICTED' : 'DECLARATION EVIDENCED',
+        remarks: `${group} — ${checked} matched${clashed ? `, ${clashed} DID NOT MATCH` : ''}${
+          stillOwed ? `, ${stillOwed} still unread` : ''
+        }${actorSuffix(actor)}`,
+      })
+      app.lastCustomerActivityAt = nowIso()
+      return true
+    })
+  },
+
+  recordAgentFindings: (appId, docId, results, actor) => {
+    mutate(set, appId, (app) => {
+      const doc = app.documents.find((d) => d.id === docId)
+      const val = results.validation?.output as ValidationOutput | undefined
+      const incoming = val?.results ?? []
+
+      // The validation agent already builds real `ValidationResult`s off the
+      // real catalogue and refuses to re-open anything waived or failed. Until
+      // now they were thrown away, so nothing the swarm found ever reached the
+      // Validations tab — or `evaluateGate`, which reads exactly this array.
+      if (incoming.length > 0) {
+        const byId = new Map(app.validations.map((v) => [v.catalogueId, v]))
+        for (const r of incoming) byId.set(r.catalogueId, r)
+        app.validations = [...byId.values()]
+      }
+
+      const fraud = results.fraud?.output as FraudOutput | undefined
+      const failed = incoming.filter((r) => r.status === 'fail').length
+      const blocking = hasBlocking(results)
+
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        // `hasBlocking` is the whole reason the runtime tags findings with a
+        // level: a BLOCK-severity rule failing is not the same event as a
+        // warning, and the audit trail should not read as though it were.
+        verb: blocking ? 'AGENT CHECKS — BLOCKING' : 'AGENT CHECKS RAN',
+        remarks: `${doc?.label ?? docId} — ${incoming.length} validation(s) recorded${
+          failed ? `, ${failed} failed` : ''
+        }${fraud ? ` · fraud signals: ${fraud.signals.length}` : ''}${
+          blocking ? ' · A PERSON MUST LOOK BEFORE THIS FILE MOVES' : ''
+        }${actorSuffix(actor)}`,
+      })
+
+      app.lastCustomerActivityAt = nowIso()
+      return true
+    })
   },
 
   recordDeclaredFields: (appId, fields, actor, note) => {

@@ -20,6 +20,9 @@ import { consentProgress, isBlockedOnConsent, sourcingMix } from '@/lib/sourcing
 import { ambiguityReason } from '@/data/classification'
 import { briefFromRun, runUniversitySwarm } from '@/lib/agents/university'
 import { BRIEF_TTL_HOURS, briefStaleness } from '@/lib/agents/university'
+import { gatesFor } from '@/lib/declared'
+import { docToText } from '@/lib/agents/sanction'
+import { downloadText, stampedName } from '@/lib/csv'
 
 // ---- Documents -------------------------------------------------------------
 export function DocumentsTab({ app }: { app: Application }) {
@@ -577,7 +580,11 @@ export function TranchesTab({ app }: { app: Application }) {
   return (
     <div className="space-y-2">
       {app.tranches.map((t) => {
-        const gatesOk = t.gates.every((g) => g.passed)
+        // Derived, not stored — tranche 1 carries the declaration gate. The
+        // officer must see the same gate the release check enforces, or the
+        // button fails for a reason the screen never showed.
+        const gates = gatesFor(app, t)
+        const gatesOk = gates.every((g) => g.passed)
         return (
           <div key={t.id} className="rounded-xl border border-[var(--line)] bg-white shadow-card p-3">
             <div className="flex items-center justify-between">
@@ -591,7 +598,7 @@ export function TranchesTab({ app }: { app: Application }) {
             <div className="mt-2">
               <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">Gates</div>
               <div className="flex flex-wrap gap-1">
-                {t.gates.map((g) => (
+                {gates.map((g) => (
                   <Chip key={g.ref} tone={g.passed ? 'green' : 'red'}>{g.passed ? '✓' : '✗'} {g.label}</Chip>
                 ))}
               </div>
@@ -617,6 +624,110 @@ export function TranchesTab({ app }: { app: Application }) {
 // ---- Comms -----------------------------------------------------------------
 export function CommsTab({ app }: { app: Application }) {
   return <CommThread app={app} />
+}
+
+// ---- Sanction pack (§Phase D) ----------------------------------------------
+export function PapersTab({ app }: { app: Application }) {
+  const approve = useStore((s) => s.approveOutreachDraft)
+  const discard = useStore((s) => s.discardOutreachDraft)
+  const papers = app.generatedDocs ?? []
+  const drafts = app.comms.filter((c) => c.status === 'draft')
+
+  if (papers.length === 0 && drafts.length === 0) {
+    return <EmptyState>No sanction pack yet — the seven agents run at countersign (S11).</EmptyState>
+  }
+
+  return (
+    <div className="space-y-4">
+      {papers.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+            Papers produced · {papers.length}
+          </div>
+          <div className="space-y-2">
+            {papers.map((d) => (
+              <div key={d.id} className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-slate-700">{d.title}</span>
+                    {/* Bank-only papers are labelled as such. The CAM and the
+                        risk note are not for the customer, and an officer
+                        emailing one on is a real way that goes wrong. */}
+                    <Chip tone={d.audience === 'bank' ? 'amber' : 'blue'}>
+                      {d.audience === 'bank' ? 'bank only' : 'shared with customer'}
+                    </Chip>
+                  </div>
+                  <button
+                    className="shrink-0 rounded-lg border border-[var(--line)] px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                    onClick={() => downloadText(stampedName(d.title, d.producedAt, 'txt'), docToText(d))}
+                  >
+                    Download
+                  </button>
+                </div>
+                <div className="mt-2 space-y-2">
+                  {d.sections.map((s) => (
+                    <div key={s.title}>
+                      <div className="text-[11px] font-semibold text-slate-500">{s.title}</div>
+                      {s.rows.length === 0 ? (
+                        <div className="text-[12px] text-slate-400">—</div>
+                      ) : (
+                        <div className="mt-0.5 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
+                          {s.rows.map((r) => (
+                            <div key={r.label} className="flex justify-between gap-3 text-[12px]">
+                              <span className="text-slate-500">{r.label}</span>
+                              <span className="text-right font-medium text-slate-700">{r.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {s.note && <div className="mt-0.5 text-[11px] italic text-slate-500">{s.note}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {drafts.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+            Drafted messages · {drafts.length} awaiting an officer
+          </div>
+          <div className="space-y-2">
+            {drafts.map((c) => (
+              <div key={c.id} className="rounded-xl border border-amber-200 bg-amber-50/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-slate-700">
+                    {c.channel} · {c.subject}
+                  </span>
+                  <Chip tone="amber">draft — not sent</Chip>
+                </div>
+                <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-[18px] text-slate-600">
+                  {c.body}
+                </pre>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    className="rounded-lg bg-[var(--brand)] px-2.5 py-1 text-[11px] font-semibold text-white"
+                    onClick={() => approve(app.appId, c.id)}
+                  >
+                    Approve &amp; send
+                  </button>
+                  <button
+                    className="rounded-lg border border-[var(--line)] px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                    onClick={() => discard(app.appId, c.id)}
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ---- Integrations ----------------------------------------------------------

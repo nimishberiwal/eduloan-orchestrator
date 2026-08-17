@@ -245,6 +245,13 @@ export interface ExtractedField {
   selfDeclared?: boolean
   /** v5 — which checklist documents would evidence this field. */
   backingDocIds?: string[]
+  /** v5 — which EXTRACTION key evidences this field (`DeclarationSpec.fromKey`).
+   *  Carried onto the record because CJ-28 verifies fields it did NOT collect:
+   *  without it, the screen has a label and a typed value but no way to find
+   *  the corresponding reading, and every re-check would land back on
+   *  'pending'. The same form-key/reader-key namespace split that produced
+   *  defect #4. */
+  sourceKey?: string
 }
 
 // ---- Validation catalogue (§10) --------------------------------------------
@@ -363,6 +370,10 @@ export interface AuditEvent {
 export type CommChannel = 'SMS' | 'Email' | 'WhatsApp' | 'Call'
 export type CommDirection = 'outbound' | 'inbound'
 export type CommStatus =
+  /** `draft` is §Phase D: the outreach agent WRITES messages, it does not send
+   *  them. A draft is inert until an officer approves it through `sendComm`.
+   *  Distinct from `queued`, which means it is going out. */
+  | 'draft'
   | 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'replied' | 'no_answer'
 export type CallOutcome =
   | 'connected' | 'no_answer' | 'busy' | 'wrong_number' | 'callback_requested'
@@ -512,6 +523,35 @@ export interface UniversityBrief {
   coverageNote?: string
 }
 
+// ---- Generated papers (§Phase D) -------------------------------------------
+// The checklist `documents` are rows we COLLECT. These are artifacts we
+// PRODUCE. Conflating the two would put a paper the bank wrote onto the
+// customer's outstanding-items list.
+export type GeneratedDocKind =
+  | 'cam'
+  | 'sanction_letter'
+  | 'kfs'
+  | 'repayment_schedule'
+  | 'covenants_schedule'
+  | 'risk_note'
+
+export interface GeneratedSection {
+  title: string
+  rows: { label: string; value: string }[]
+  note?: string
+}
+
+export interface GeneratedDoc {
+  id: string
+  kind: GeneratedDocKind
+  title: string
+  /** Bank-only papers never render on a customer surface. Same rule the agent
+   *  findings follow, for the same reason. */
+  audience: 'customer' | 'bank'
+  producedAt: string
+  sections: GeneratedSection[]
+}
+
 // ---- The Application -------------------------------------------------------
 export interface Application {
   // header
@@ -581,6 +621,10 @@ export interface Application {
    *  by hand and must keep compiling untouched. Per-application rather than
    *  per-university so the 24-hour refresh is per-file. */
   universityBrief?: UniversityBrief
+  /** §Phase D — the sanction pack, produced by the seven-agent swarm at
+   *  countersign. OPTIONAL, like every other v5 addition, so `data/seed.ts`'s
+   *  14 hand-written literals keep compiling untouched. */
+  generatedDocs?: GeneratedDoc[]
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'
@@ -746,6 +790,7 @@ export type App360Tab =
   | 'extracted'
   | 'validations'
   | 'decision'
+  | 'papers'
   | 'covenants'
   | 'tranches'
   | 'comms'
