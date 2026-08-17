@@ -25,27 +25,25 @@
 //   3. Where a university genuinely yields little, `coverage` is 'thin' and
 //      `note` says why. Four universities are marked thin. That is the honest
 //      answer, not a gap to be padded.
-//   4. For the 14 selectable universities, `university` equals
-//      `UniversityRef.short` in US_UNIVERSITIES. This module is deliberately
-//      standalone — no import from lib/ — so the two are kept in step by the
-//      string values below, not by a compile-time link.
+//   4. `university` MUST equal `UniversityRef.short` in US_UNIVERSITIES, for
+//      every one of the 45. This module is deliberately standalone — no import
+//      from lib/ — so the two are kept in step by the string values below,
+//      not by a compile-time link.
 //
-// COVERAGE — TWO POPULATIONS
-// This corpus now holds two overlapping sets of universities:
+// COVERAGE — 45 UNIVERSITIES, ALL SELECTABLE
+// This corpus holds two overlapping sets, and US_UNIVERSITIES now carries both:
 //
-//   (a) The 14 universities the pre-qualification screen can select, i.e.
-//       US_UNIVERSITIES in lib/eligibility.ts. Every one is covered.
-//   (b) The 39 US schools that appear in the Financial Times Global MBA
-//       Ranking 2026. Eight of those are already in set (a) — MIT, Harvard,
-//       UC Berkeley, NYU, CMU, USC, ASU and UT Dallas — so set (b) adds 31
-//       further universities.
+//   (a) The original 14 on the pre-qualification screen.
+//   (b) The 39 US schools in the Financial Times Global MBA Ranking 2026.
+//       Eight are already in set (a) — MIT, Harvard, UC Berkeley, NYU, CMU,
+//       USC, ASU and UT Dallas — so set (b) added 31 further universities.
 //
-// The 31 additions are NOT YET SELECTABLE. US_UNIVERSITIES has 14 entries and
-// lives in lib/eligibility.ts, which this workstream does not own. Until that
-// array is extended, `intelFor('Wharton')` etc. will return a dossier for a
-// university the pre-qual screen cannot offer. That is a deliberate, flagged
-// state, not an oversight — the consuming agent should treat a hit on a
-// non-selectable university as informational only.
+// One caveat carried over from that extension: the 31 additions have NO `rank`
+// in US_UNIVERSITIES, because `rank` feeds overlayFor() and therefore raises
+// the unsecured lending ceiling. The existing 14 ranks match no single
+// published edition, so nothing could be added consistently without inventing
+// numbers that move credit outcomes. Those 31 get no Premier overlay until
+// someone sets the ranks deliberately. See the note in lib/eligibility.ts.
 //
 // A NOTE ON THE FT LIST
 // The Financial Times publishes no "top 50 US colleges" ranking. Its US-facing
@@ -2380,9 +2378,9 @@ const HULT: UniversityIntel = {
 }
 
 // ---- Corpus -----------------------------------------------------------------
-// The first 14 match US_UNIVERSITIES in order, so the two can be diffed by eye.
-// The remaining 31 are the FT Global MBA Ranking 2026 additions, in FT rank
-// order. They are not selectable until US_UNIVERSITIES is extended.
+// Ordered to match US_UNIVERSITIES exactly — the original 14 first, then the 31
+// FT Global MBA Ranking 2026 additions in FT rank order — so the two lists can
+// be diffed by eye.
 
 export const UNIVERSITY_INTEL: UniversityIntel[] = [
   MIT,
@@ -2434,16 +2432,9 @@ export const UNIVERSITY_INTEL: UniversityIntel[] = [
   HULT,
 ]
 
-/**
- * The 14 short names that US_UNIVERSITIES currently carries. Everything in
- * UNIVERSITY_INTEL outside this set has a dossier but is not yet selectable on
- * the pre-qualification screen — see the coverage note at the top of this file.
- * Exported so a caller can tell the two apart without importing from lib/.
- */
-export const SELECTABLE_UNIVERSITIES: readonly string[] = [
-  'MIT', 'Stanford', 'Harvard', 'CMU', 'Columbia', 'UC Berkeley', 'Purdue',
-  'Northeastern', 'ASU', 'UT Dallas', 'NYU', 'USC', 'Stevens', 'Clark',
-]
+// (A SELECTABLE_UNIVERSITIES list lived here while the FT additions were not yet
+// in US_UNIVERSITIES. They are now, so it would be a second copy of that array
+// and a drift hazard. Removed rather than left to rot.)
 
 /**
  * Look up the dossier for a university. Accepts either the short name used in

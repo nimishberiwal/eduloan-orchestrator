@@ -211,6 +211,61 @@ export const US_UNIVERSITIES: UniversityRef[] = [
   { name: 'University of Southern California', short: 'USC', rank: 125, stem: true },
   { name: 'Stevens Institute of Technology', short: 'Stevens', rank: 671, stem: true },
   { name: 'Clark University', short: 'Clark', rank: 941, stem: false },
+
+  // ---- FT Global MBA Ranking 2026 additions ------------------------------
+  // The 31 US universities in that ranking not already listed above. Each has
+  // a researched dossier in data/universityIntel.ts.
+  //
+  // WHY `rank` IS OMITTED ON ALL 31 — READ BEFORE FILLING IT IN.
+  // `rank` is not display-only: overlayFor() turns it into the Premier overlay,
+  // which RAISES the unsecured lending ceiling (<=50 → top50, <=100 → top100).
+  // A wrong number here hands a borrower a larger unsecured facility.
+  //
+  // The 14 ranks above could not be tied to any single published edition —
+  // QS 2025 puts Columbia at 34 and NYU at 43, not the 23 and 38 recorded
+  // above — so they read as prototype values rather than a real ranking table.
+  // Rather than guess an edition, mix two, or invent numbers that would move
+  // credit outcomes, `rank` is left undefined here. Undefined is the SAFE
+  // default: overlayFor() returns no overlay, so these universities get no
+  // unsecured uplift until someone sets the ranks deliberately.
+  //
+  // To populate: pick the one ranking table the credit policy actually uses and
+  // apply it to all 45 rows at once, so overlays stay comparable across them.
+  //
+  // `stem` drives only the post-study work duration shown on the file, not any
+  // credit outcome. It is set true where the university runs a substantial
+  // engineering or computing school, false otherwise.
+  { name: 'University of Pennsylvania', short: 'Penn', stem: true },
+  { name: 'Northwestern University', short: 'Northwestern', stem: true },
+  { name: 'Cornell University', short: 'Cornell', stem: true },
+  { name: 'Duke University', short: 'Duke', stem: true },
+  { name: 'Yale University', short: 'Yale', stem: true },
+  { name: 'University of Virginia', short: 'UVA', stem: true },
+  { name: 'University of Chicago', short: 'Chicago', stem: true },
+  { name: 'Dartmouth College', short: 'Dartmouth', stem: true },
+  { name: 'University of California, Los Angeles', short: 'UCLA', stem: true },
+  { name: 'University of Michigan', short: 'Michigan', stem: true },
+  { name: 'Washington University in St. Louis', short: 'WashU', stem: true },
+  { name: 'Rice University', short: 'Rice', stem: true },
+  { name: 'University of North Carolina at Chapel Hill', short: 'UNC', stem: false },
+  { name: 'University of Texas at Austin', short: 'UT Austin', stem: true },
+  { name: 'Georgia Institute of Technology', short: 'Georgia Tech', stem: true },
+  { name: 'University of Washington', short: 'UW', stem: true },
+  { name: 'Georgetown University', short: 'Georgetown', stem: false },
+  { name: 'Vanderbilt University', short: 'Vanderbilt', stem: true },
+  { name: 'Emory University', short: 'Emory', stem: false },
+  { name: 'University of Georgia', short: 'UGA', stem: true },
+  { name: 'University of Notre Dame', short: 'Notre Dame', stem: true },
+  { name: 'University of Rochester', short: 'Rochester', stem: true },
+  { name: 'Boston University', short: 'BU', stem: true },
+  { name: 'Michigan State University', short: 'Michigan State', stem: true },
+  { name: 'University of Pittsburgh', short: 'Pittsburgh', stem: true },
+  { name: 'Fordham University', short: 'Fordham', stem: false },
+  { name: 'Brigham Young University', short: 'BYU', stem: true },
+  { name: 'University of Miami', short: 'Miami', stem: true },
+  { name: 'College of William & Mary', short: 'William & Mary', stem: false },
+  { name: 'University of Wisconsin–Madison', short: 'Wisconsin', stem: true },
+  { name: 'Hult International Business School', short: 'Hult', stem: false },
 ]
 
 export function findUniversity(name: string): UniversityRef | undefined {
