@@ -431,39 +431,45 @@ position: an FT MBA rank is not a global university rank, and feeding Wharton's 
 rank of 1 into `overlayFor()` would have been a category error that silently
 widened a ceiling. All 31 additions omit `rank` entirely.
 
-> **⚠ CREDIT DECISION — DECIDED, with two consequences to implement carefully.**
+> **✅ CREDIT DECISION — CLOSED. `rank` stays undefined on the 31.** (`7bf9b58`,
+> comment only — no behaviour moved.)
 >
-> The omission had its own consequence: `overlayFor(undefined)` returns
-> `{ overlay: null, ceilingInr: null }`, so Wharton, Booth, Kellogg, Yale SOM, Haas
-> and Tuck got **no** premier overlay while **Purdue** at rank 89 still got
-> `Global-Rank-Top-100` — the policy intent inverted for exactly the schools the
-> extension was for.
+> The open question was: the 31 FT additions carry no `rank`, and
+> `overlayFor(undefined)` returns `{ overlay: null, ceilingInr: null }` — so
+> Wharton, Booth, Kellogg, Yale SOM, Haas and Tuck get **no** premier overlay while
+> **Purdue** at rank 89 gets `Global-Rank-Top-100`. Policy intent inverted for
+> exactly the schools the extension was for.
 >
-> **The user has decided: set `rank` from the FT MBA table.** Being applied by the
-> corpus session, which owns `eligibility.ts`. Two things verified here that the
-> implementation has to account for:
+> Setting `rank` from the FT MBA table was proposed, briefly accepted, and then
+> **rejected** on a ground neither of the sessions arguing it had raised: **six of
+> the 45 are not in the FT table at all.** Stanford and Columbia would have gone
+> `top50` → **NONE** — an applicant losing their unsecured uplift because a
+> business school declined a questionnaire. Regressing existing universities to buy
+> an uplift for new ones is a bad trade, so `rank` stays a **global** rank
+> everywhere it is set.
 >
-> **1. Every FT school lands in the top-50 band.** FT positions run 1…39, and
-> `overlayFor` maps `rank <= 50` → `Global-Rank-Top-50` → **₹75L** unsecured
-> (`POLICY.premierOverlayCeilings`), not the ₹50L top-100 ceiling. That flows into
-> `unsecuredCeiling` → `securityRequired = tier === 'tier3' && askInr >
-> unsecuredCeiling` (`eligibility.ts:94`), so **collateral requirements flip on any
-> Tier-3 ask between ₹50L and ₹75L**. Hult, Fordham, BYU, Miami, William & Mary,
-> Michigan State and Pittsburgh all get the same ₹75L ceiling as Wharton.
+> **Correction to an earlier version of this note.** It claimed FT positions run
+> 1…39 so every FT school lands in the `rank <= 50` band. That was wrong — the span
+> is **1…89**, splitting 23 top-50 / 16 top-100. The number came from the Phase B
+> session (conflating "39 US schools" with "positions 1…39") and was repeated here
+> without being checked against the FT table, which this session cannot see. The
+> ₹75L / ₹50L ceilings, the `securityRequired` chain at `eligibility.ts:94` and the
+> label derivation below were all verified directly and stand.
 >
-> **2. The basis label will be wrong, and the right one already exists.**
-> `PreQual.tsx:511` derives the label purely from the band:
+> **What survives, and is now documented in code.** `PreQual.tsx:511` derives the
+> basis label from the band alone:
 > `a.overlayBasis = offer.premierOverlay === 'top50' ? 'Global-Rank-Top-50' : …`.
-> So an FT-derived overlay gets stamped **`Global-Rank-Top-50`** — asserting a
-> global university ranking that was never consulted. It is rendered on the
-> Decision tab (`tabs.tsx:378`) and in the Tier chip tooltip (`badges.tsx:30`).
->
-> `OverlayBasis` **already carries `'Programmatic-Top'`**, and `POLICY`'s own note
+> That is **only honest while `rank` is a global rank everywhere it is set** — an
+> unwritten invariant, and the label renders to a reviewer on the Decision tab
+> (`tabs.tsx:378`) and the Tier chip tooltip (`badges.tsx:30`). If a
+> programme-specific table is ever used for `rank`, the label must move with it:
+> `OverlayBasis` already carries **`'Programmatic-Top'`**, and `POLICY`'s note
 > names the valid bases as *"QS/THE/ARWU rank or programmatic-top (AACSB/ABET) or
-> lender-curated"*. An FT MBA ranking is precisely a programmatic basis. **Set
-> `overlayBasis = 'Programmatic-Top'` for the FT-derived entries** rather than
-> letting the band-derived ternary mislabel them — otherwise the audit trail says
-> the bank relied on a global rank it did not use.
+> lender-curated"*. The invariant is now recorded at the point the label is
+> manufactured.
+>
+> `seedBulk.ts:414` has the same band-to-label shape but keys off `uni.tier`, not
+> `rank`, so it is unaffected either way.
 
 #### Defects and traps found during Phase E
 
