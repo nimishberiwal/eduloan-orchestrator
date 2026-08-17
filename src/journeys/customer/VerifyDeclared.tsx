@@ -135,8 +135,16 @@ export function VerifyDeclared({ app }: { app: Application }) {
                   <GCard tone="plain">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
+                        {/* NEVER `g.group` raw. Group labels are console
+                            grouping keys and carry bucket codes — "Academic
+                            (E3)", "Income — salaried (P2)" — which §0.6 says a
+                            customer never reads. This fallback only fires when
+                            the backing document has gone missing from the
+                            checklist, which is rare enough that it would not
+                            have been noticed in a walkthrough. The vocabulary
+                            scanner found it. */}
                         <p className="display text-[15px] font-semibold leading-[21px]">
-                          {doc ? shortDocName(doc.label) : g.group}
+                          {doc ? shortDocName(doc.label) : 'Details you typed in'}
                         </p>
                         <p className="mt-1 text-[13px] leading-[19px] text-[var(--grey-600)]">
                           {g.fields.map((f) => `${f.label}: ${f.enteredValue}`).join(' · ')}

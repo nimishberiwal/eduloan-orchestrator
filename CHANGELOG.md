@@ -23,6 +23,79 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.0.1] — 2026-08-18
+
+Closes the four **Known / open** items carried by 2.0.0. No new features.
+
+### Added — the vocabulary scanner is now checked in
+
+- `src/lib/vocabulary.ts` — the patterns and the customer route list, in one
+  place. `scripts/scan-vocabulary.mjs` scans customer-facing source statically
+  and exits non-zero on a hit, so it can gate a release; the same module drives
+  a live DOM walk. Neither half is sufficient alone: static analysis cannot see
+  `${bucket.code} verified`, and a DOM walk only covers the routes someone
+  remembered to visit. Sharing the patterns means they cannot drift.
+- The check that found V1's four leaks was a snippet pasted into a browser
+  console and never checked in, so it could not be re-run — and by 2.0.0 it had
+  not been run against anything V2 added.
+
+### Fixed
+
+- **CJ-28 could show a customer a bucket code.** Its "Still to send" heading fell
+  back to the raw declaration group label — `Academic (E3)`, `Income — salaried
+  (P2)` — when the backing document was missing from the checklist. Rare enough
+  that a walkthrough would not have caught it; the scanner did on its first run.
+- **`audit()` stamped the un-offset clock.** It defaulted to `NOW_ISO`, the
+  frozen base, rather than `nowIso()`, which includes the operator's offset. Any
+  audit line written after someone advanced the demo clock was dated *before*
+  the action that produced it — hiding exactly what the clock control exists to
+  show. Verified: +48h, then a milestone lands at base + 48h.
+- **The fraud agent's verdict reached nobody.** Its score and signals were
+  computed and dropped; `audience: 'bank'` kept the verdict private, and private
+  turned out to mean private from everyone. New optional
+  `Application.agentChecks` records score, signals, the rules run and whether
+  anything blocks, per document, merged by `docId` so a re-upload corrects
+  rather than appends.
+
+### Changed
+
+- Documents tab gains an **Agent checks** strip. Placed there rather than on
+  Integrations, which the plan suggested, because Integrations is a table of
+  external system calls and a fraud check on an uploaded page is not one.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` · `npm run build` · standalone | clean · clean · 0.92 MB |
+| `scripts/scan-vocabulary.mjs` | `leaks: []` across 31 files, 8 patterns |
+| Live DOM scan, 27 customer routes | `leaks: []`, all 27 rendered without redirect |
+| Live DOM scan, CJ-28 populated | `leaks: []` with both lists and a discrepancy shown |
+| Fraud verdict, bank side | `fraud 50% — name similarity against a sanctions list`, blocking, on the Documents tab |
+| Fraud verdict, customer side | no leak; the words "fraud" and "watchlist" absent from the customer screen |
+| Audit clock | +48h → audit line at base + 48h |
+| `docs/ACCEPTANCE.md` items 1–5, 7–9 | green after **Reset demo data** |
+| `ACCEPTANCE-JOURNEYS` items 9, 10, 11 | green — re-walked because V2 rewrote `Capture` |
+
+### Known / open
+
+- **The acceptance re-walk was risk-targeted, not exhaustive.** Eight of the 14
+  console checks were asserted against the store after a reset, and three of the
+  18 journey items were re-walked in the browser — the three that run through
+  the `Capture`/`ConfirmDetails` path V2 rewrote. The remaining journey items
+  (handoff tokens, expiry, role matrix, analytics) were not re-walked; V2 does
+  not touch them, but "does not touch" is an argument, not a check.
+- **`CaptureHost` keeps its capture result in component state across a `:docId`
+  change.** Navigating directly from one capture screen to another shows the
+  confirm screen for the previous document. Pre-existing, not reachable through
+  the normal flow (which exits via the task list), and found only because a
+  scripted walk moved between capture routes directly.
+- Item 4 of `docs/ACCEPTANCE.md` (`APP-2605` verbatim fail messages) was checked
+  against the seeded tokens in the store, not read off the rendered Validations
+  tab.
+
+---
+
 ## [2.0.0] — 2026-08-18
 
 **V2 complete.** Items 1–5 of the six agentic-origination developments; item 6

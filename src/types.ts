@@ -523,6 +523,27 @@ export interface UniversityBrief {
   coverageNote?: string
 }
 
+// ---- Agent checks on a document (§Phase F) ---------------------------------
+/** What the three-agent swarm found on one uploaded document.
+ *
+ *  The fraud agent's score and signals used to be computed and dropped: the
+ *  customer saw a lane finish, the bank saw nothing. `audience: 'bank'` on the
+ *  findings kept the verdict private, which is correct — but private to whom
+ *  turned out to be nobody. */
+export interface DocumentAgentCheck {
+  docId: string
+  docLabel: string
+  ranAt: string
+  /** 0–1. Higher is more concerning. */
+  fraudScore: number
+  fraudSignals: string[]
+  /** Catalogue rules the validation agent ran against this document. */
+  validationIds: string[]
+  failedValidationIds: string[]
+  /** A BLOCK-severity rule failed — a person must look before the file moves. */
+  blocking: boolean
+}
+
 // ---- Generated papers (§Phase D) -------------------------------------------
 // The checklist `documents` are rows we COLLECT. These are artifacts we
 // PRODUCE. Conflating the two would put a paper the bank wrote onto the
@@ -625,6 +646,9 @@ export interface Application {
    *  countersign. OPTIONAL, like every other v5 addition, so `data/seed.ts`'s
    *  14 hand-written literals keep compiling untouched. */
   generatedDocs?: GeneratedDoc[]
+  /** §Phase F — what the document swarm found, per document. Optional, so the
+   *  14 seed literals compile untouched. */
+  agentChecks?: DocumentAgentCheck[]
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'

@@ -24,7 +24,7 @@ import type {
   AuditRole, AutomationEvent, ClosureKind, ConsentType, EscalationEvent, StageRule,
 } from '@/types'
 import type { HitlStatus, HitlTrigger } from '@/types'
-import type { ExtractedField, PartyRole, UniversityBrief } from '@/types'
+import type { DocumentAgentCheck, ExtractedField, PartyRole, UniversityBrief } from '@/types'
 import type { HitlDecisions } from '@/lib/hitl'
 import type { JourneyActor, JourneyEvent } from '@/types/journeys'
 import {
@@ -276,9 +276,21 @@ interface Actions {
   ) => void
 }
 
+/** `nowIso()`, not `NOW_ISO`.
+ *
+ *  `NOW_ISO` is the frozen BASE instant; `nowIso()` is that base plus whatever
+ *  offset the operator has applied with the clock control. Defaulting to the
+ *  base meant every audit line written after someone advanced the clock was
+ *  stamped at 10:00 on the base day — so a reviewer who advanced +48h to trip
+ *  an SLA, or +25h to force a university re-crawl, saw the resulting audit
+ *  entries dated before the thing they had just done. It hid exactly what the
+ *  clock control exists to show.
+ *
+ *  Callers that know better still override: `recordUniversityBrief` stamps
+ *  `ts: brief.fetchedAt` so the line matches the crawl it describes. */
 function audit(app: Application, e: Partial<Application['audit'][number]>): void {
   app.audit = [
-    { id: uid('AE'), ts: NOW_ISO, actor: '', role: 'Admin', verb: '', ...e } as Application['audit'][number],
+    { id: uid('AE'), ts: nowIso(), actor: '', role: 'Admin', verb: '', ...e } as Application['audit'][number],
     ...app.audit,
   ]
 }
@@ -1621,6 +1633,22 @@ export const useStore = create<State & Actions>((set, get) => ({
       const fraud = results.fraud?.output as FraudOutput | undefined
       const failed = incoming.filter((r) => r.status === 'fail').length
       const blocking = hasBlocking(results)
+
+      // §Phase F — the fraud agent's verdict lands on the file. It was
+      // computed and dropped: the customer watched the lane finish and the
+      // bank was never told what it found. Merged by docId so re-uploading a
+      // document corrects the record rather than appending a second opinion.
+      const check: DocumentAgentCheck = {
+        docId,
+        docLabel: doc?.label ?? docId,
+        ranAt: nowIso(),
+        fraudScore: fraud?.score ?? 0,
+        fraudSignals: fraud?.signals ?? [],
+        validationIds: incoming.map((r) => r.catalogueId),
+        failedValidationIds: incoming.filter((r) => r.status === 'fail').map((r) => r.catalogueId),
+        blocking,
+      }
+      app.agentChecks = [...(app.agentChecks ?? []).filter((c) => c.docId !== docId), check]
 
       audit(app, {
         actor: actorName(actor),

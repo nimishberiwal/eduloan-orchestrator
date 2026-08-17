@@ -40,8 +40,55 @@ export function DocumentsTab({ app }: { app: Application }) {
   const setApp360Tab = useStore((s) => s.setApp360Tab)
   const runAutoFetch = useStore((s) => s.runAutoFetch)
 
+  const checks = app.agentChecks ?? []
+  const flagged = checks.filter((c) => c.fraudSignals.length > 0 || c.blocking)
+
   return (
     <div>
+      {/* §Phase F — what the document swarm found. Bank surface only: the
+          customer sees the fraud LANE run and gets a neutral summary, never the
+          verdict. Placed here rather than on Integrations, which the plan
+          suggested, because Integrations is a table of external system calls
+          and a fraud check on an uploaded page is not one. */}
+      {checks.length > 0 && (
+        <div className="mb-3 rounded-xl border border-[var(--line)] bg-white px-3 py-2 shadow-card">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Agent checks
+            </span>
+            <span className="text-12 text-slate-600">
+              <b className="tnum text-slate-700">{checks.length}</b> document
+              {checks.length === 1 ? '' : 's'} read
+            </span>
+            <span className="text-12 text-slate-600">
+              <b className={`tnum ${flagged.length ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {flagged.length}
+              </b>{' '}
+              with something noted
+            </span>
+            {checks.some((c) => c.blocking) && (
+              <Chip tone="red">a person must look before this file moves</Chip>
+            )}
+          </div>
+          {flagged.length > 0 && (
+            <div className="mt-1.5 space-y-1">
+              {flagged.map((c) => (
+                <div key={c.docId} className="text-[11px] leading-[16px]">
+                  <span className="font-medium text-slate-700">{c.docLabel}</span>
+                  <span className="text-slate-400"> · fraud {(c.fraudScore * 100).toFixed(0)}%</span>
+                  {c.fraudSignals.length > 0 && (
+                    <span className="text-slate-500"> — {c.fraudSignals.join('; ')}</span>
+                  )}
+                  {c.failedValidationIds.length > 0 && (
+                    <span className="text-red-600"> · failed {c.failedValidationIds.join(', ')}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* §v3 — how this checklist is actually sourced (BRD "Digital Source") */}
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 shadow-card">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sourcing</span>
