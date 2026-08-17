@@ -2240,10 +2240,36 @@ const PITTSBURGH: UniversityIntel = {
 const FORDHAM: UniversityIntel = {
   university: 'Fordham',
   name: 'Fordham University',
-  coverage: 'thin',
-  note:
-    'Still only the FT ranking position, after a second attempt. Fordham\'s coverage sits almost entirely in its two student papers, whose article URLs carry sequence numbers rather than dates and which return access errors on every route tried, so nothing could be cited to a verifiable publication date. Four things are consistently reported across independent search results and are worth verifying directly rather than re-researching: undergraduate tuition rising 4.5% to $67,925 for 2026-27, the fifth consecutive annual increase, announced by the chief financial officer on 9 April; a forecast deficit for the 2026 financial year driven by federal funding uncertainty and the graduation of the largest undergraduate cohort in the university\'s history; a hiring pause with a 10% cut to non-staff departmental spending; and student work-study hours capped at ten per week. The tuition escalation is the one that bears on a cost of attendance. No adverse coverage was found.',
+  coverage: 'adequate',
   findings: [
+    {
+      id: 'fordham-policy-tuition-increase-2026',
+      university: 'Fordham',
+      category: 'policy',
+      headline: 'Tuition up 4.5% for 2026-27, on top of 4.65% the year before',
+      detail:
+        'Fordham raised tuition 4.5% and meal plan and average room fees 3.0% for 2026-27, following a 4.65% rise the previous year and increases of around 4% for several years before that. The chief financial officer cited inflation in operating costs, and said financial aid would rise for those with the greatest need. An applicant should budget for continued above-inflation fee escalation across a two-year programme.',
+      level: 'attention',
+      source: {
+        publisher: 'The Observer',
+        url: 'https://fordhamobserver.com/82633/breaking/breaking-tuition-increases-4-5-for-2026-27-academic-year/',
+        date: '2026-04-09',
+      },
+    },
+    {
+      id: 'fordham-funding-deficit-measures-2025',
+      university: 'Fordham',
+      category: 'funding',
+      headline: 'Hiring paused and departmental spending cut 10% against a forecast deficit',
+      detail:
+        'The chief financial officer announced a hiring pause and a 10% cut to non-staff departmental spending against a forecast deficit for the 2026 financial year, naming uncertainty in federal higher education funding and the graduation of Fordham\'s largest undergraduate class as the drivers. Student work-study hours were capped at ten per week, and the faculty union questioned whether the measures protected teaching.',
+      level: 'attention',
+      source: {
+        publisher: 'The Observer',
+        url: 'https://fordhamobserver.com/79902/recent/news/fordham-implements-new-budgetary-measures/',
+        date: '2025-03-26',
+      },
+    },
     {
       id: 'fordham-ranking-ft-mba-2026-76th',
       university: 'Fordham',
