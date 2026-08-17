@@ -54,7 +54,7 @@
 // says nothing about the MS programmes that most applicants on this book take.
 //
 // RESEARCH WINDOW
-// Sources span 2025-03-07 to 2026-08-13. The corpus was assembled 2026-08-17.
+// Sources span 2024-10-18 to 2026-08-13. The corpus was assembled 2026-08-17.
 // The dominant themes: a sustained contraction in US federal research funding,
 // the endowment excise tax rise, the elimination of the federal Grad PLUS loan
 // from 1 July 2026, and a tightening student-visa regime — all of which bear on
@@ -2006,10 +2006,36 @@ const EMORY: UniversityIntel = {
 const UGA: UniversityIntel = {
   university: 'UGA',
   name: 'University of Georgia',
-  coverage: 'thin',
-  note:
-    'Only the FT ranking position could be cited to a verifiable date. UGA\'s own news service and the student paper publish without day-level dates that could be confirmed, and the university news page returned an access error. Searches surfaced a faculty hiring initiative, research expenditure of $654 million and new medical and nursing schools, but none of it could be pinned to a datable source, so none of it is recorded here. No adverse coverage was found.',
+  coverage: 'adequate',
   findings: [
+    {
+      id: 'uga-funding-grant-terminations-2025',
+      university: 'UGA',
+      category: 'funding',
+      headline: 'Nine research grants terminated and the overhead rate cut from 51% to 15%',
+      detail:
+        'At least nine research grants at UGA were terminated, with researchers instructed to stop work on receipt of a termination notice. The federal cap on indirect costs — laboratory space, equipment and staff — was cut to 15% against UGA\'s standard rate of 51%, which is the larger structural hit of the two.',
+      level: 'attention',
+      source: {
+        publisher: 'The Red & Black',
+        url: 'https://www.redandblack.com/uganews/how-recent-grant-terminations-affect-uga-research/article_fe4c746e-e480-40b3-a9c3-67d773dca6a2.html',
+        date: '2025-04-14',
+      },
+    },
+    {
+      id: 'uga-funding-nih-exposure-2025',
+      university: 'UGA',
+      category: 'funding',
+      headline: 'Second-largest recipient of federal biomedical funding in the state',
+      detail:
+        'UGA sits behind only Emory among Georgia universities for National Institutes of Health funding, so proposed reductions to the NIH budget fall on it harder than on most public universities of its size. Reporting placed UGA alongside Emory, Augusta and Georgia Tech as the institutions most exposed in the state.',
+      level: 'info',
+      source: {
+        publisher: 'Georgia Public Broadcasting',
+        url: 'https://www.gpb.org/news/2025/04/28/research-at-georgia-universities-has-already-taken-a-hit-what-could-be-lost',
+        date: '2025-04-28',
+      },
+    },
     {
       id: 'uga-ranking-ft-mba-2026-60th',
       university: 'UGA',
@@ -2216,7 +2242,7 @@ const FORDHAM: UniversityIntel = {
   name: 'Fordham University',
   coverage: 'thin',
   note:
-    'Only the FT ranking position could be cited to a verifiable date. Fordham\'s coverage sits almost entirely in two student papers whose articles carry no publication dates and which returned access errors. Reported measures — a forecast deficit for the 2026 financial year, a hiring pause, a 10% cut to non-staff spending and reduced work-study hours — could not be tied to a datable source and are not recorded. No adverse coverage was found.',
+    'Still only the FT ranking position, after a second attempt. Fordham\'s coverage sits almost entirely in its two student papers, whose article URLs carry sequence numbers rather than dates and which return access errors on every route tried, so nothing could be cited to a verifiable publication date. Four things are consistently reported across independent search results and are worth verifying directly rather than re-researching: undergraduate tuition rising 4.5% to $67,925 for 2026-27, the fifth consecutive annual increase, announced by the chief financial officer on 9 April; a forecast deficit for the 2026 financial year driven by federal funding uncertainty and the graduation of the largest undergraduate cohort in the university\'s history; a hiring pause with a 10% cut to non-staff departmental spending; and student work-study hours capped at ten per week. The tuition escalation is the one that bears on a cost of attendance. No adverse coverage was found.',
   findings: [
     {
       id: 'fordham-ranking-ft-mba-2026-76th',
@@ -2237,8 +2263,22 @@ const BYU: UniversityIntel = {
   name: 'Brigham Young University',
   coverage: 'thin',
   note:
-    'Only the FT ranking position could be cited to a verifiable date. BYU is privately funded by its sponsoring church, carries minimal federal research exposure and generates almost no national coverage, so the themes that dominate this corpus — federal funding cuts, endowment tax, settlements — do not arise. Its own news releases are undated. Note that BYU operates a two-tier tuition schedule under which non-members of the sponsoring church pay double; an applicant should verify which rate applies before a cost of attendance is accepted.',
+    'Two findings. BYU is privately funded by its sponsoring church, carries minimal federal research exposure and generates almost no national coverage, so the themes that dominate this corpus — federal funding cuts, endowment tax, settlements, grant terminations — genuinely do not arise here rather than being missing. No leadership change, faculty move or adverse coverage was found.',
   findings: [
+    {
+      id: 'byu-policy-two-tier-tuition-2025',
+      university: 'BYU',
+      category: 'policy',
+      headline: 'Applicants outside the sponsoring church pay exactly double the published tuition',
+      detail:
+        'BYU charges members of its sponsoring church $3,444 per semester for undergraduate study and $7,996 for the graduate Marriott business and law programmes; non-members pay $6,888 and $15,992 for the same places. Tuition rose 3% across all bands. Almost every applicant on this book will fall in the non-member tier, so the headline tuition figure must be doubled before a cost of attendance is accepted.',
+      level: 'attention',
+      source: {
+        publisher: 'BYU News',
+        url: 'https://news.byu.edu/announcements/byu-tuition-to-increase-3-for-2025-26-academic-year',
+        date: '2025-04-28',
+      },
+    },
     {
       id: 'byu-ranking-ft-mba-2026-77th',
       university: 'BYU',
@@ -2258,8 +2298,22 @@ const MIAMI: UniversityIntel = {
   name: 'University of Miami',
   coverage: 'thin',
   note:
-    'Only the FT ranking position could be cited to a verifiable date. The university\'s federal-policy and research pages are undated, and no outlet has reported budget, enrolment or funding figures for it in this cycle. A presidential search was under way at the time of research but no datable announcement was found. No adverse coverage was found.',
+    'Two findings. Miami\'s federal-policy and research pages are undated and no outlet has reported budget, enrolment or federal funding figures for it in this cycle. Reported figures — a $6.6 billion 2026 budget, research and sponsored-programme expenditure above $413 million, and international students at roughly 13% of the student body — could not be tied to a datable source and are therefore not recorded. No adverse coverage was found, and no federal grant terminations or budget cuts were reported for it, which is unusual among the private research universities in this corpus.',
   findings: [
+    {
+      id: 'miami-leadership-president-appointed-2024',
+      university: 'Miami',
+      category: 'leadership',
+      headline: 'Leadership settled after an acting period',
+      detail:
+        'Joe Echevarria was confirmed as Miami\'s seventh president by unanimous trustee vote in October 2024, having served as acting president after Julio Frenk left for UCLA. A former Deloitte chief executive and Miami alumnus, he is a permanent rather than interim appointment, so no further transition is pending.',
+      level: 'info',
+      source: {
+        publisher: 'WLRN',
+        url: 'https://www.wlrn.org/education/2024-10-18/university-of-miami-names-joe-echevarria-as-its-seventh-president',
+        date: '2024-10-18',
+      },
+    },
     {
       id: 'miami-ranking-ft-mba-2026-78th',
       university: 'Miami',
@@ -2361,8 +2415,22 @@ const HULT: UniversityIntel = {
   name: 'Hult International Business School',
   coverage: 'thin',
   note:
-    'Only the FT ranking position could be cited to a verifiable date. Hult is a small private business school rather than a research university, so the federal funding, endowment tax and grant-termination themes that dominate this corpus do not apply to it. Everything else that surfaced came from ranking aggregators rather than datable primary reporting. One structural point worth flagging without a citation to hang it on: Hult teaches across campuses in several countries, so an applicant\'s study location — and therefore their visa route and cost of attendance — needs to be confirmed against the offer letter rather than assumed to be the United States.',
+    'Two findings. Hult is a small private business school rather than a research university, so the federal funding, endowment tax and grant-termination themes that dominate this corpus do not apply to it. Its own announcements — including a Financial Times Masters in Finance 2026 position of 39th, up nine places — are published without dates, so they are not recorded. One structural point worth flagging that no source states directly: Hult teaches across campuses in several countries, so an applicant\'s study location, and therefore their visa route and cost of attendance, must be confirmed against the offer letter rather than assumed to be the United States.',
   findings: [
+    {
+      id: 'hult-adverse-international-dependence-2025',
+      university: 'Hult',
+      category: 'adverse',
+      headline: 'Named among private colleges most dependent on international enrolment',
+      detail:
+        'Hult was listed among sixteen private US colleges identified as heavily reliant on foreign students, flagged as facing added instability from visa restrictions and geopolitical uncertainty. It was not reported as closing or failing; the concern is concentration of tuition revenue in exactly the cohort this book lends to, which makes the institution\'s finances move with the same visa policy that affects the borrower.',
+      level: 'attention',
+      source: {
+        publisher: 'Higher Education Inquirer',
+        url: 'https://www.highereducationinquirer.org/2025/08/a-preliminary-list-of-private-colleges.html',
+        date: '2025-08-01',
+      },
+    },
     {
       id: 'hult-ranking-ft-mba-2026-89th',
       university: 'Hult',
