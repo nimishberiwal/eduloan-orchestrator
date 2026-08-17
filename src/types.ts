@@ -788,7 +788,11 @@ export interface AutomationEvent {
 }
 
 // ---- Closure forensics (§v2 req 8) -----------------------------------------
-export type ClosureKind = 'rejected' | 'withdrawn' | 'expired'
+/** `disbursed` is §V3. Without a positive class every cohort rate a learning
+ *  agent can compute is a rejection rate — "12% of Pune files failed" with no
+ *  way to say what the other 88% did, because DISBURSED_ACTIVE carried no
+ *  Outcome record at all. A closure is a closure whether or not it went well. */
+export type ClosureKind = 'rejected' | 'withdrawn' | 'expired' | 'disbursed'
 
 export interface Outcome {
   kind: ClosureKind

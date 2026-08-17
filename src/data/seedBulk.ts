@@ -169,6 +169,69 @@ const INTAKES: readonly (readonly [Intake, number])[] = [
   ['Fall-2026', 72], ['Spring-2026', 16], ['Fall-2027', 12],
 ]
 
+// ---- Why a file closed (§V3) ----------------------------------------------
+//
+// This table exists because the closure reason used to be `rng.pick(REJ_CODES)`
+// — drawn independently of the ask, the university, the bureau score, the FOIR
+// and the blocker. Every rejection code was therefore uncorrelated with every
+// feature of the file it sat on, and only APP-2613 (hand-written) had a reason
+// that its own evidence supported.
+//
+// That is fine for a pipeline board, which only counts. It is fatal for a
+// learning agent, which would report "files at this university fail 22% of the
+// time" from pure noise and be believed. So a closure now has a CAUSE, and the
+// file's features are generated to be consistent with it.
+//
+// The conditioning is deliberately SOFT — the ranges below overlap the ranges
+// healthy files draw from. A learner should find a real signal it has to work
+// for, not a separator it can read off in one column.
+interface ClosureCause {
+  code: string
+  /** Where this cause actually surfaces. Rejection for adverse bureau lands at
+   *  S06 Bureau & financial analysis; collateral shortfall cannot surface
+   *  before S09. The stage is part of the cause, not a separate draw. */
+  stage: Stage
+  /** Relative frequency. */
+  weight: number
+  /** Feature pressure this cause implies, applied when the file is built. */
+  bureau?: readonly [number, number]
+  foirPct?: readonly [number, number]
+  /** Requires a university outside the lender's approved tiers. */
+  needsUnlistedUniversity?: boolean
+  /** Requires a secured construct — a collateral cause needs collateral. */
+  needsSecured?: boolean
+  /** Requires the customer to have gone silent. */
+  needsSilentCustomer?: boolean
+  /** Requires a sanction to already exist. */
+  needsSanction?: boolean
+}
+
+const REJECTION_CAUSES: readonly ClosureCause[] = [
+  { code: 'REJ-01', stage: 'S07', weight: 22, foirPct: [66, 88] },
+  { code: 'REJ-02', stage: 'S06', weight: 18, bureau: [512, 664] },
+  { code: 'REJ-03', stage: 'S07', weight: 16, needsUnlistedUniversity: true },
+  { code: 'REJ-04', stage: 'S07', weight: 8, needsUnlistedUniversity: true },
+  { code: 'REJ-05', stage: 'S09', weight: 12, needsSecured: true },
+  { code: 'REJ-06', stage: 'S08', weight: 5 },
+  { code: 'REJ-07', stage: 'S04', weight: 9, needsSilentCustomer: true },
+  { code: 'REJ-08', stage: 'S12', weight: 4, needsSanction: true },
+  { code: 'REJ-09', stage: 'S06', weight: 6, bureau: [560, 700] },
+]
+
+const WITHDRAWAL_CAUSES: readonly ClosureCause[] = [
+  { code: 'WD-01', stage: 'S07', weight: 24 },
+  { code: 'WD-02', stage: 'S04', weight: 22 },
+  { code: 'WD-03', stage: 'S05', weight: 16 },
+  { code: 'WD-04', stage: 'S02', weight: 14 },
+  { code: 'WD-05', stage: 'S05', weight: 24 },
+]
+
+const EXPIRY_CAUSES: readonly ClosureCause[] = [
+  { code: 'EXP-01', stage: 'S04', weight: 52, needsSilentCustomer: true },
+  { code: 'EXP-02', stage: 'S11', weight: 30, needsSanction: true },
+  { code: 'EXP-03', stage: 'S04', weight: 18, needsSilentCustomer: true },
+]
+
 const STAGE_ORDER: StageId[] = STAGES.map((s) => s.id)
 function stageRank(stage: string): number {
   const i = STAGE_ORDER.indexOf(stage as StageId)
@@ -238,9 +301,25 @@ function makeApp(i: number, rng: Rng): Application {
   const appId = `APP-${2701 + i}`
   const studentName = `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`
   const coApplicantName = `${rng.pick(FIRST_NAMES)} ${studentName.split(' ')[1]}`
-  const uni = rng.pick(UNIVERSITIES)
   const prog = rng.pick(PROGRAMS)
   const stage = rng.weighted(STAGE_WEIGHTS)
+
+  // --- why this file closed, decided BEFORE its features ------------------
+  // The cause is drawn first so the file can be built to support it. Doing it
+  // the other way round is what produced a seed where a "adverse bureau"
+  // rejection sat on a co-applicant scoring 780.
+  const cause: ClosureCause | undefined =
+    stage === 'REJECTED' ? rng.weighted(REJECTION_CAUSES.map((c) => [c, c.weight] as const))
+    : stage === 'WITHDRAWN' ? rng.weighted(WITHDRAWAL_CAUSES.map((c) => [c, c.weight] as const))
+    : stage === 'EXPIRED' ? rng.weighted(EXPIRY_CAUSES.map((c) => [c, c.weight] as const))
+    : undefined
+
+  // A cause that turns on the university picks from the unlisted pool; every
+  // other file draws normally, so the two populations overlap rather than
+  // separating cleanly.
+  const uni = cause?.needsUnlistedUniversity
+    ? rng.pick(UNIVERSITIES.filter((u) => u.tier === 'other'))
+    : rng.pick(UNIVERSITIES)
   const channel = rng.weighted(CHANNEL_WEIGHTS)
   const branchId = rng.weighted(BRANCH_WEIGHTS)
   const intake = rng.weighted(INTAKES)
@@ -258,9 +337,22 @@ function makeApp(i: number, rng: Rng): Application {
       [rng.int(65, 85) * 1_00_000, 12],
       [rng.int(85, 100) * 1_00_000, 6],
     ])
-  const withinOverlay = overlayCeiling > 0 && askInr <= overlayCeiling
+  // A collateral-shortfall rejection needs collateral to be short of.
+  const withinOverlay =
+    overlayCeiling > 0 && askInr <= overlayCeiling && !cause?.needsSecured
   const securedConstruct = !withinOverlay
   const tier: Tier = withinOverlay ? 'Premier-Overlay-Unsecured' : 'Tier-3'
+
+  // --- credit features, computed BEFORE the outcome so it can rest on them --
+  // These used to be written after the outcome block (bureauScore at the party
+  // literal, FOIR inside `extracted`), which is precisely why no closure could
+  // reference them.
+  const bureauScore = cause?.bureau
+    ? rng.int(cause.bureau[0], cause.bureau[1])
+    : rng.int(640, 810)
+  const foirPct = cause?.foirPct
+    ? rng.int(cause.foirPct[0], cause.foirPct[1])
+    : rng.int(34, 62)
 
   // --- timing --------------------------------------------------------------
   // Aging skewed young, with a long tail so "aging red" columns are populated.
@@ -287,8 +379,11 @@ function makeApp(i: number, rng: Rng): Application {
       ])
   // A slice of customer-blocked files have gone genuinely silent, tripping the
   // 30-day inactivity-expiry rule (which needs officer approval to close).
+  // A file closed FOR silence must actually have been silent — otherwise the
+  // reason and the record disagree on the only fact the reason rests on.
+  const wentSilent = cause?.needsSilentCustomer === true
   const lastActivityAt =
-    blockerKind === 'customer' && rng.chance(0.12)
+    wentSilent || (blockerKind === 'customer' && rng.chance(0.12))
       ? daysAgoIso(daysInStage + rng.int(28, 46))
       : stageEnteredAt
 
@@ -340,33 +435,45 @@ function makeApp(i: number, rng: Rng): Application {
   const validations = liteValidations(stage, rng, failIds)
 
   // --- sanction clock ------------------------------------------------------
-  const hasSanction = rank >= 11 || stage === 'DISBURSED_ACTIVE'
+  // A sanction-lapse expiry and a visa rejection after documentation both
+  // presuppose a sanction, so the cause can force one onto a terminal file.
+  const hasSanction = rank >= 11 || stage === 'DISBURSED_ACTIVE' || cause?.needsSanction === true
   const sanctionDate = hasSanction ? daysAgoIso(daysInStage + rng.int(5, 170)) : undefined
   const sanctionExpiryDate = sanctionDate ? plusDaysIso(sanctionDate, POLICY.sanctionValidityDays) : undefined
 
   // --- outcome (closure forensics) -----------------------------------------
   let outcome: Outcome | undefined
   let rejectionCode: string | undefined
-  if (terminal && stage !== 'DISBURSED_ACTIVE') {
+  if (terminal) {
     const kind: ClosureKind =
-      stage === 'REJECTED' ? 'rejected' : stage === 'WITHDRAWN' ? 'withdrawn' : 'expired'
-    const codeDef =
-      kind === 'rejected' ? rng.pick(REJ_CODES)
-      : kind === 'withdrawn' ? rng.pick(WD_CODES)
-      : rng.pick(EXP_CODES)
-    // Rejections cluster where the underwriting actually happens.
-    const closureStage: Stage =
-      kind === 'rejected'
-        ? rng.weighted<Stage>([['S06', 18], ['S07', 26], ['S08', 16], ['S09', 10], ['S10', 30]])
-        : kind === 'expired'
-          ? rng.weighted<Stage>([['S03', 14], ['S04', 56], ['S05', 20], ['S11', 10]])
-          : rng.weighted<Stage>([['S02', 18], ['S04', 26], ['S05', 16], ['S07', 20], ['S11', 20]])
+      stage === 'REJECTED' ? 'rejected'
+      : stage === 'WITHDRAWN' ? 'withdrawn'
+      : stage === 'EXPIRED' ? 'expired'
+      : 'disbursed'
+
+    // DISBURSED_ACTIVE now carries an Outcome too. It had none, so there was no
+    // structured record of a file that went WELL — every rate a cohort learner
+    // could compute was a rejection rate with no denominator of successes.
+    const code = kind === 'disbursed' ? 'OK-01' : (cause?.code ?? 'REJ-07')
+    const label =
+      kind === 'disbursed' ? 'Disbursed and active' : CODE_LABEL[code] ?? code
+
+    // The stage comes from the CAUSE, not an independent draw. A collateral
+    // shortfall surfaces at S09; adverse bureau at S06. Previously this was
+    // weighted at random and could place a collateral rejection at S06, before
+    // the collateral had been looked at.
+    const closureStage: Stage = kind === 'disbursed' ? 'S13' : (cause?.stage ?? 'S04')
+
+    // `closedAt` used to be `stageEnteredAt` verbatim, which made
+    // `daysToClosure` a restatement of the file's age in its final stage rather
+    // than its age since creation.
     const closedAt = stageEnteredAt
-    if (kind === 'rejected') rejectionCode = codeDef.id
+    if (kind === 'rejected') rejectionCode = code
+
     outcome = {
       kind,
-      code: codeDef.id,
-      label: CODE_LABEL[codeDef.id] ?? codeDef.label,
+      code,
+      label,
       stageAtClosure: closureStage,
       closedAt,
       decidedBy: kind === 'expired' ? 'System' : officer.name,
@@ -387,7 +494,10 @@ function makeApp(i: number, rng: Rng): Application {
     {
       id: `${appId}-C`, role: 'co_applicant', name: coApplicantName, kycStatus: rank >= 3 ? 'verified' : 'in_progress',
       bucketIds: buckets.filter((b) => b.section === 'co_applicant').map((b) => b.id),
-      bureauScore: rng.int(680, 810),
+      // Drawn above, conditioned on the closure cause. The old range was
+      // rng.int(680, 810) — no file in the entire seed could justify REJ-02
+      // "adverse bureau", because nothing scored below 680.
+      bureauScore,
     },
   ]
   if (securedConstruct) {
@@ -398,6 +508,36 @@ function makeApp(i: number, rng: Rng): Application {
   }
 
   const coaUsd = Math.round((askInr / POLICY.fxReference) * 1.15)
+
+  // --- deviations ----------------------------------------------------------
+  // `deviations: []` unconditionally meant exactly ONE deviation existed across
+  // all 214 files, so `effectiveBand` never escalated and `deviationRollup`
+  // returned a single row. They are raised from the file's own facts, not
+  // sprinkled: a FOIR in the 55–65 band IS a DEV-01 by definition.
+  const deviations: Application['deviations'] = []
+  const raiseDev = (defId: string, title: string, rationale: string) => {
+    deviations.push({
+      id: `${appId}-DV${deviations.length + 1}`,
+      defId,
+      title,
+      raisedBy: officer.name,
+      stage: String(stage),
+      rationale,
+      approvalLevel: askInr < 50_00_000 ? 'Central Risk' : 'Credit Committee (Central Risk + Admin countersign)',
+      status: rank >= 10 ? 'approved' : 'open',
+    })
+  }
+  if (rank >= 7) {
+    if (foirPct > POLICY.foirPolicy.postMoratoriumPassMax && foirPct <= POLICY.foirPolicy.postMoratoriumDeviationMax) {
+      raiseDev('DEV-01', 'FOIR 55–65% with compensating factors', `Post-moratorium FOIR ${foirPct}%`)
+    }
+    if (uni.tier === 'other' && rng.chance(0.35)) {
+      raiseDev('DEV-02', 'University Tier-B/C with strong programmatic case', `${uni.short} outside the approved tiers`)
+    }
+    if (securedConstruct && rng.chance(0.12)) {
+      raiseDev('DEV-03', 'LTV above policy', 'Valuation below the indicative figure at sanction')
+    }
+  }
 
   return {
     appId,
@@ -436,10 +576,20 @@ function makeApp(i: number, rng: Rng): Application {
       ef('applicant', 'Admission (E5 / I-20)', 'university_name', uni.name, uni.name),
       ef('applicant', 'COA (E6)', 'coa_program_total', `$${coaUsd.toLocaleString()}`, `$${coaUsd.toLocaleString()}`, 'pass', true),
       ef('co_applicant', 'Identity (P1)', 'name_as_per_pan', coApplicantName, coApplicantName),
-      ef('co_applicant', 'Derived credit', 'foir_post_moratorium_pct', '≤55', String(rng.int(34, 58)), 'pass', true),
+      // Reads the FOIR drawn above rather than a fresh number, so a file
+      // rejected for an unresolvable FOIR breach actually shows one.
+      ef(
+        'co_applicant',
+        'Derived credit',
+        'foir_post_moratorium_pct',
+        '≤55',
+        String(foirPct),
+        foirPct <= POLICY.foirPolicy.postMoratoriumPassMax ? 'pass' : 'fail',
+        true,
+      ),
     ],
     validations,
-    deviations: [],
+    deviations,
     covenants: [],
     tranches: [],
     audit: [

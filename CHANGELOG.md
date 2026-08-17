@@ -23,6 +23,91 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.1.0] — 2026-08-18
+
+**V3 groundwork.** Makes the seeded population causally consistent, so the
+learning agents planned for V3 have something real to learn from. No new
+features; every change is to generated data and the rollups that read it.
+
+### Why
+
+Planning the V3 credit orchestrator surfaced a problem that would have made its
+self-learning sub-agents worthless. The closure reason on a bulk application was
+`rng.pick(REJ_CODES)` — drawn independently of the ask, the university, the
+bureau score, the FOIR and the blocker. Every rejection code was uncorrelated
+with every feature of the file it sat on. Only APP-2613, hand-written, had a
+reason its own evidence supported.
+
+That is harmless for a pipeline board, which only counts. It is fatal for a
+cohort learner, which would report "files at this university fail 22% of the
+time" from pure noise, in a credit context, to a clearance committee.
+
+### Changed — `src/data/seedBulk.ts`
+
+- **A closure now has a cause, and the file is built to support it.** Three
+  tables (`REJECTION_CAUSES`, `WITHDRAWAL_CAUSES`, `EXPIRY_CAUSES`) map a reason
+  to the stage where it would actually surface and the feature pressure it
+  implies. The cause is drawn first; the file's features follow from it.
+- **Conditioning is deliberately soft.** A REJ-02 file draws a bureau score from
+  512–664 while a healthy file draws 640–810 — the ranges overlap. A learner
+  should find a real signal it has to work for, not a separator it can read off
+  one column.
+- **`bureauScore` was `rng.int(680, 810)`**, so nothing in the entire seed could
+  justify REJ-02 "adverse bureau". It now has a sub-680 tail.
+- **`stageAtClosure` comes from the cause**, not an independent weighted draw. A
+  collateral shortfall surfaces at S09; adverse bureau at S06. Previously a
+  collateral rejection could be recorded at S06, before the collateral had been
+  looked at.
+- **FOIR and bureau are computed before the outcome**, not after it. They were
+  written at the party literal and inside `extracted`, which is precisely why no
+  closure could reference them.
+- **Deviations are raised from the file's own facts** — a FOIR in the 55–65 band
+  *is* a DEV-01. `deviations: []` unconditionally meant one deviation existed
+  across all 214 files, so `effectiveBand` never escalated.
+
+### Added
+
+- **`ClosureKind` gains `'disbursed'`** and DISBURSED_ACTIVE files carry an
+  `Outcome`. Without a positive class every rate a cohort learner could compute
+  was a rejection rate with no denominator of successes.
+
+### Fixed
+
+- **`closureByKind` silently dropped the disbursed files.** Its kind list was
+  the three bad endings, written when those were the only kinds — so seven
+  closed files vanished from the closure mix while `closureRollup` counted
+  them, leaving two panels on the same screen disagreeing about how many files
+  had closed.
+
+### Verified
+
+| Check | Before | After |
+|---|---|---|
+| Applications with an `Outcome` | 22 | **37** |
+| Positive outcomes | 0 | **7** |
+| Files with ≥1 deviation | 1 | **26** |
+| Mean bureau on REJ-02 files | 745 (book 745) | **650** (book 729) |
+| Mean FOIR on REJ-01 files | 46 (book 46) | **81** (book 47) |
+| REJ-03 files on an unlisted university | ~random | **100%** |
+| REJ-05 files with a secured construct | ~random | **100%** |
+| `closureByKind` vs `closureRollup` totals | 30 vs 37 | **37 vs 37** |
+
+`docs/ACCEPTANCE.md` items 1–5, 7–9 green after reset · party isolation clean
+across 97 task-document links · sourcing reconciles on all 14 · population still
+214 · the curated 14 byte-identical · `tsc` · `build` · standalone 0.92 MB ·
+`scan-vocabulary` `leaks: []`.
+
+### Known / open
+
+- The curated APP-2613 closes at S10 while generated REJ-02 files close at S06.
+  That is correct: `seed.ts`'s 14 literals are protected by invariant 4 and were
+  not touched.
+- Cohort sizes are still small. 214 files across 8 branches and 30 universities
+  means many cohorts will be thin, and the V3 learning agents must say so rather
+  than quote a percentage from n=3.
+
+---
+
 ## [2.0.3] — 2026-08-18
 
 The acceptance re-walk is now complete rather than risk-targeted. All 32 items

@@ -174,7 +174,12 @@ export function closureByStage(apps: Application[]): ClosureByStageRow[] {
 }
 
 export function closureByKind(apps: Application[]): (CountValue & { kind: ClosureKind | 'open' })[] {
-  const kinds: (ClosureKind | 'open')[] = ['rejected', 'withdrawn', 'expired']
+  // `disbursed` must be here. The list was the three bad endings, written when
+  // those were the only kinds that existed — so the moment §V3 gave
+  // DISBURSED_ACTIVE an Outcome, seven closed files were silently dropped from
+  // the closure mix while `closureRollup` counted them. Two panels on the same
+  // screen disagreeing about how many files had closed.
+  const kinds: (ClosureKind | 'open')[] = ['rejected', 'withdrawn', 'expired', 'disbursed']
   return kinds.map((kind) => ({ kind, ...cv(apps.filter((a) => a.outcome?.kind === kind)) }))
 }
 

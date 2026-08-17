@@ -15,10 +15,15 @@ import { closureByKind, closureByStage, closureRollup } from '@/lib/reports'
 import { Card, Empty, Stat } from './Analytics'
 import { Chip } from '@/components/common/ui'
 
-const KIND_TONE: Record<ClosureKind, 'red' | 'orange' | 'purple'> = {
+// `disbursed` is a closure that went well, so it must not read like the other
+// three. This panel is titled for rejections but `closureByKind` returns every
+// ClosureKind, and a green row is the point: without it the view shows only
+// losses and implies the book is nothing else.
+const KIND_TONE: Record<ClosureKind, 'red' | 'orange' | 'purple' | 'green'> = {
   rejected: 'red',
   withdrawn: 'orange',
   expired: 'purple',
+  disbursed: 'green',
 }
 
 export function RejectionInsights({
