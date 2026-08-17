@@ -1,7 +1,14 @@
 # Handoff — v2 "agentic origination" (WORK IN PROGRESS, UNCOMMITTED)
 
 **Written:** 2026-08-17
-**Status:** working tree only. Nothing committed. `v1.0.0` on GitHub is untouched.
+**Status:** **`v1.1.0` was cut and pushed on 2026-08-17** — `origin/main` is at
+`8eb6d35`, tag `v1.1.0`. It is a **checkpoint** release: the corpus and all of
+Phase E, plus the Phase A/B/C-core snapshot at `1c60aaa`. The Phase B session's
+later work was uncommitted and **not compiling** when the version was cut, so it
+is deliberately **not** in v1.1.0 — it remains in the working tree for that
+session to commit and ship in the next version. v2 items 4 and 5 are not started.
+⚠️ **The GitHub Release is still outstanding** — GitHub's Releases API was
+returning 503 at the time. The tag and CHANGELOG are done; see §10.
 **Companion docs:** `HANDOFF-JOURNEYS.md` (v1, complete) · `docs/RELEASING.md` · `docs/API-CONTRACT.md` · `docs/ACCEPTANCE-JOURNEYS.md`
 **Design plan:** `~/.claude/plans/moving-on-to-the-precious-hoare.md` — the full approved design for all six v2 items. Read it before continuing.
 
@@ -47,7 +54,7 @@ Six requested developments. Progress:
 |---|---|---|
 | 1 | Upload-instead-of-typing + parallel-agent processing view | **Built and wired into all 6 screens** |
 | 2 | Three agents per upload (extraction · fraud · validation) | **Built and verified** |
-| 3 | Skip → self-declared → post-decision mandatory upload w/ cross-validation | **Core built**; screen + gate **not built** |
+| 3 | Skip → self-declared → post-decision mandatory upload w/ cross-validation | **Built and verified** (CJ-28 + derived tranche-1 gate) |
 | 4 | Sanction-time CAM + letter + extras by parallel agents | **Not started** |
 | 5 | Pre-sanction customer message drafting agent | **Not started** |
 | 6 | University news crawler agent with source links | **Built and verified** (Phase E — see §7) |
@@ -208,6 +215,8 @@ value first and watching the swarm overwrite it (COA 50000 → 62400, income
 | 11 | **CJ-11 recorded a false discrepancy:** entered "Rajesh Rao", read `"as printed"`, `match: 'fail'`. The reader's own placeholder was compared as if it were a reading. | `declared.ts` treats `as printed` / `—` as no reading. A field the document didn't evidence now goes back to `selfDeclared: true, match: 'pending'` so it stays owed for CJ-28, instead of `selfDeclared: false` where `pendingDeclarations` silently dropped it. |
 | 12 | **`ConfirmDetails` showed customers the placeholder.** Defect #5's `ExtractionContext` fix was applied in `SmartFill` only, so the ORIGINAL upload path — the one most documents take — still rendered "Name: as printed" on the confirm screen. | Passed `extractionContext(app, doc)` at both `extractFields` call sites in `DocFlows`. A fix that lands in the new path and not the old one is not a fix. |
 | 13 | **The validation agent's output was discarded.** `runValidation` built real `ValidationResult`s off the real catalogue and nothing consumed `ValidationOutput` — so nothing the swarm found reached the Validations tab or `evaluateGate`, and `hasBlocking` was dead code. | `recordAgentFindings` persists them and `hasBlocking` picks the audit verb. See §7's closeout. |
+| 14 | **A 1% tolerance passed a wrong graduation year.** `valuesAgree` applied a proportional tolerance to every number, for one stated reason — a customer rounding 8.43 to 8.4. On a year that is ±20 years of slack, so entered "2024" against a marksheet reading 2025 came back `pass`. A different graduation year is exactly what an officer checks for gaps and course duration. | The tolerance now applies ONLY where one side is fractional; whole numbers compare exactly. A proportional tolerance is wrong for a quantity that is a label rather than a measurement. Nine cases re-checked: year fails, 8.43/8.4 still passes, money/DOB/prefix behaviour unchanged. Surfaced by CJ-28 — the first screen that re-checks a year against its document. |
+| 15 | **`discrepancies()` swept in pre-existing seeded mismatches.** It filtered `app.extracted` for any `match === 'fail'`, but the seed carries seven such fields (an I-20 name mismatch, a COA arithmetic delta, a bureau flag) that are console-side validation failures with their own rules and gates. Wiring the disbursement gate to it would have let one of those hold up a demo file through a gate about self-declared facts — **APP-2612, the only seeded application with tranches, carries one.** | Scoped to declaration-flow fields via `declarationFields()` (`backingDocIds` is set by both builders and nothing else). Verified: four seeded apps carry failed extracted fields and all four report `settled: true`. |
 
 ---
 
@@ -282,16 +291,40 @@ live on APP-2901.
 audit line but have nowhere to live on the application. That is Phase F's
 "agent findings on the Integrations and HITL views", not a gap here.
 
-### Phase C remainder
+### Phase C — **DONE**, walked live on APP-2901
 
-- `CJ-28 VerifyDeclared.tsx` at `/apply/:id/verify` — lists each self-declared group
-  with its backing document; upload → same three-agent swarm → `match` computed.
-- Discrepancies rendered in plain language ("You told us 8.4 CGPA; your marksheet
-  says 7.9") using the two-action shape `lib/plainLanguage.ts` already provides.
-- **The gate (user's choice): condition of disbursement.** A new `TrancheGate` on
-  tranche 1 — the file sanctions and signs normally, but no money moves until
-  `declarationsSettled(app)` is true. `TrancheGate { label, ref, passed }` already
-  exists and CJ-26 already renders it as a plain "before this can go out" line.
+`src/journeys/customer/VerifyDeclared.tsx` at `/apply/:id/verify`, plus the gate.
+
+**Two lists, and they are not the same problem.** *Still to send* is typed-but-
+unevidenced and an upload resolves it. *Doesn't match* is a contradiction an
+upload will not fix — a person has to decide which value is right. The screen
+never rewrites `enteredValue`: it is the thing being verified, and a step that
+quietly corrects its own subject is worth nothing to the officer reading it.
+
+**The gate is DERIVED, not stored.** `gatesFor(app, tranche)` appends
+`declarationGate(app)` to tranche 1. Two reasons: journey applications are
+created with `tranches: []` and nothing ever fills them, so there is no creation
+point to attach a stored gate to; and a stored copy of a boolean recomputable
+from `app.extracted` is a copy that can go stale against it. Read at all three
+sites that matter — CJ-26, `releaseTranche`, and the console Tranches tab — so
+the officer sees the gate the release check enforces.
+
+**Three things this needed that did not exist:**
+
+| Addition | Why |
+|---|---|
+| `sourceKey?: string` on `ExtractedField` | CJ-28 verifies fields it did NOT collect. Without the extraction key on the record, the screen has a label and a typed value but no way to find the reading, and every re-check lands back on `pending`. The `fromKey` namespace split (defect #4) again, one layer down. |
+| `verifyDeclared(fields, extracted, docId)` | `declareEvidenced` builds from a screen's form state. CJ-28 has no form — the values were typed days ago. Same comparison, different source, and it never touches `enteredValue`. |
+| `SmartFill`'s `docId` prop | CJ-28 works from the `backingDocIds` already on a field, so it knows the id and should not have to reverse it into a label pattern. |
+
+**Entry point:** a blocking `upload` task at S11→DISBURSED_ACTIVE, applicant only.
+Asking mid-capture would undo the point of letting them skip the upload.
+
+Verified on APP-2901: two groups owed → PAN upload resolved 3/3 clean → marksheet
+upload produced two genuine contradictions rendered in plain language →
+`declarationsSettled` false → gate `passed: false`. Console shows
+`✓ Self-declared details evidenced` as tranche 1's fifth gate on APP-2612 and
+correctly absent from tranche 2.
 
 ### Phase D — sanction pack (items 4 & 5)
 
@@ -516,12 +549,34 @@ repeat exactly. The 24h university refresh in Phase E must use this clock, not w
 
 ---
 
-## 10. Release procedure (when approved)
+## 10. Release state — v1.1.0
 
-Per `docs/RELEASING.md` — no push without all three:
+Per `docs/RELEASING.md`, a push needs all three. Two are done:
 
-1. Semver tag
-2. `CHANGELOG.md` entry
-3. GitHub Release
+| # | Requirement | State |
+|---|---|---|
+| 1 | Semver tag | ✅ `v1.1.0`, annotated, pushed → `8eb6d35` |
+| 2 | `CHANGELOG.md` entry | ✅ committed, with a Verified table and 8 Known/open items |
+| 3 | GitHub Release | ❌ **OUTSTANDING** — GitHub's Releases API returned `503 Service Unavailable` on every attempt (both `gh release create` and `gh release list`, so it was the service, not the call) |
 
-Target for this work: **`v1.1.0`**.
+**To finish it when GitHub recovers** — notes come from the changelog so the two
+can never disagree:
+
+```bash
+gh release create "v1.1.0" --title "v1.1.0" \
+  --notes-file <(awk "/^## \[1.1.0\]/{f=1;next} /^## \[/{f=0} f" CHANGELOG.md)
+gh release view "v1.1.0" --json tagName,url -q '.tagName + "  " + .url'
+```
+
+Nothing else is pending. Do **not** re-tag or force-push; if something in the
+release turns out wrong, cut `v1.1.1` with a `### Fixed` entry (RELEASING.md §5).
+
+### What was verified before tagging
+
+Gates were run against the release commit in a **detached worktree**, not the
+shared working tree — a parallel session's uncommitted, non-compiling work was
+present throughout and would otherwise have contaminated the result. `tsc`,
+`npm run build` and the standalone build were clean; `/__dev/tasks` showed party
+isolation clean and 14/14 projections agreeing; `/__dev/agents` showed all seven
+Phase E assertions green. The acceptance checklists were **not** re-walked —
+recorded as Known/open item 6.
