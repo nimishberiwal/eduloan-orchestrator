@@ -23,6 +23,7 @@ import { POLICY } from '@/data/policy'
 import { bucketCopy, CONSENT_COPY, sectionsFor } from '@/journeys/copy'
 import { isBlockedOnConsent } from '@/lib/sourcing'
 import { customerFixableFailures, sendBackCopy } from '@/lib/plainLanguage'
+import { pendingDeclarationCount } from '@/lib/declared'
 import { nowIso } from '@/lib/clock'
 
 // ---- Stage helpers ---------------------------------------------------------
@@ -363,6 +364,28 @@ function milestoneTasks(app: Application, forParty: PartyRole, now: string): Cus
       raisedAt: now,
       estSeconds: 240,
       route: 'mandate',
+    })
+  }
+
+  // CJ-28 — the other half of "I'll type it myself". Only the applicant sees
+  // it, and only once the decision is behind them: asking mid-capture would
+  // undo the point of letting them skip the upload in the first place.
+  const owed = pendingDeclarationCount(app)
+  // S11 (sanction) through DISBURSED_ACTIVE. `stageRank` sends closed terminals
+  // to 99, so the upper bound keeps this off a file that is already finished.
+  if (forParty === 'applicant' && rank >= 11 && rank <= 14 && owed > 0) {
+    out.push({
+      id: `${app.appId}:upload:verify-declared`,
+      appId: app.appId,
+      forParty,
+      kind: 'upload',
+      title: 'Check what you told us',
+      why: 'You typed some details in rather than uploading. Your first instalment waits on these.',
+      blocking: true,
+      origin: 'milestone',
+      raisedAt: now,
+      estSeconds: 120 * owed,
+      route: 'verify',
     })
   }
 

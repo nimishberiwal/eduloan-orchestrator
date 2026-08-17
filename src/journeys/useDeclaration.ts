@@ -25,6 +25,9 @@ export interface UseDeclarationOpts {
   section: PartySection
   group: string
   backingMatch: RegExp
+  /** Scopes `backingMatch` to one bucket — required wherever the label repeats
+   *  across sections ("PAN" is both E1 and P1). See `DeclarationSpec`. */
+  backingBucket?: RegExp
 }
 
 export interface Declaration {
@@ -41,6 +44,7 @@ export function useDeclaration(
   opts: UseDeclarationOpts,
 ): Declaration {
   const record = useStore((s) => s.recordDeclaredFields)
+  const recordFindings = useStore((s) => s.recordAgentFindings)
   const uploadDocument = useStore((s) => s.uploadDocument)
   const { actor } = useJourney({
     appId: app.appId,
@@ -67,8 +71,12 @@ export function useDeclaration(
         sizeKb: 0,
         actor,
       })
+      // The fraud and validation lanes ran too. Their output used to end at the
+      // progress bar; it now lands on the file, so what the agents found is
+      // visible to the bank and counts at the gate.
+      recordFindings(app.appId, doc.id, results, actor)
     },
-    [app.appId, uploadDocument, actor],
+    [app.appId, uploadDocument, recordFindings, actor],
   )
 
   const commit = useCallback(
