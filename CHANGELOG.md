@@ -23,6 +23,64 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.0.3] — 2026-08-18
+
+The acceptance re-walk is now complete rather than risk-targeted. All 32 items
+across both checklists were re-walked against this tree. One defect found.
+
+### Fixed
+
+- **A redirect loop in the assisted journey.** `OnBehalf`'s catch-all route used
+  `<Navigate to="summary">`, which resolves relative to the *current location*
+  rather than to the route pattern. An unknown path under `/rm/apply/:id/`
+  redirected to `…/tasks/summary`, which did not match `summary` either, so the
+  catch-all fired again — appending a segment per hop and building a URL
+  hundreds of levels deep. Now absolute.
+
+  Pre-existing, from V1. The sibling `index` route is relative and correct,
+  because at the index the location *is* the parent — which is what made the
+  bug easy to write. Item 15's guard held throughout (no assisted route ever
+  reached an identity-bound screen), which is why nobody had noticed.
+
+### Verified — the full re-walk
+
+`docs/ACCEPTANCE.md`, all 14: reset restores the seed · Kanban population ·
+APP-2603 lane failure · APP-2605 verbatim `VAL-CRS-01`/`VAL-INT-06` tokens ·
+APP-2608 C1–C4 + `CHECKLIST_REGENERATED` · maker-checker blocks self-countersign
+then advances to S11 · APP-2611 COV-01 · APP-2612 tranche gates · APP-2607
+Band-2 · non-overridable S03 gate · send-back reason codes · a decline moving
+the analytics population · the §5 role matrix · audit who/role/when/from→to.
+
+`docs/ACCEPTANCE-JOURNEYS.md`, all 18: console untouched · OTP session reuse and
+the five-wrong-codes number lock · eligibility ₹59,04,000 with no security for
+Stanford and security required unranked · APP-2901 reaching the back office ·
+AA consent flipping 4 documents with exactly one audit line attributed to the
+co-applicant · DigiLocker decline turning 7 documents into uploads and blocking
+nothing · party isolation across 97 task-document links · sourcing reconciliation
+on all 14 · bad photo rejected then retried · passport-against-I-20 offering
+reassignment · ambiguous document to HITL without asking the customer ·
+`VAL-CRS-01` in plain language carrying the seeded names · send-back reaching
+the top of the list · customer submit held by the same forward gates with no
+rule code shown · identity-bound controls visible, disabled and offering a
+handoff · remote handoff demanding the party's own OTP and reaching nothing else
+· expired token dead-ending · reset clearing every journey counter.
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` · `npm run build` · standalone | clean · clean · 0.92 MB |
+| `scripts/scan-vocabulary.mjs` | `leaks: []` |
+
+### Known / open
+
+- Item 14 of `ACCEPTANCE-JOURNEYS` documents "10 blocking tasks" after a blocked
+  submit. That was an observation of one file, not an invariant: the file it was
+  first walked on is fully collected and correctly shows none. Re-walked on a
+  file with outstanding work, where the customer does see work rather than a
+  rule. The document's number is left as written.
+- Nothing else outstanding on either checklist.
+
+---
+
 ## [2.0.2] — 2026-08-18
 
 Fixes the latent `CaptureHost` defect logged as known/open in 2.0.1. One file.

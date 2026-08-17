@@ -641,7 +641,17 @@ function OnBehalf({ officerId }: { officerId: string }) {
       <Route path="summary" element={<FileSummary app={app} officerId={officerId} />} />
       <Route path="handoff" element={<HandoffDesk app={app} officerId={officerId} />} />
       <Route path="docs" element={<CollectDocs app={app} officerId={officerId} />} />
-      <Route path="*" element={<Navigate to="summary" replace />} />
+      {/* ABSOLUTE, deliberately. `to="summary"` here resolves relative to the
+          CURRENT location, not to the route pattern — so an unknown path like
+          /rm/apply/:id/tasks redirected to /rm/apply/:id/tasks/summary, which
+          did not match `summary` either, so this catch-all fired again, and
+          again: a redirect loop that appended a segment each time and built a
+          URL hundreds of levels deep. The `index` route above is relative and
+          correct, because at the index the location IS the parent.
+
+          The guard on this screen still held throughout — no assisted route
+          reached an identity-bound screen — which is why nobody noticed. */}
+      <Route path="*" element={<Navigate to={`/rm/apply/${appId}/summary`} replace />} />
     </Routes>
   )
 }
