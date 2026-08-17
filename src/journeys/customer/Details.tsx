@@ -7,7 +7,7 @@
 // offered), extends the checklist through the EXISTING store verbs rather than
 // regenerating it — regenerating would discard verified documents (§7.7).
 // ============================================================================
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Application } from '@/types'
 import { AppShell, BackLink } from '@/journeys/shell/AppShell'
@@ -34,11 +34,37 @@ import { useSessionStore } from '@/store/sessionStore'
 import { POLICY } from '@/data/policy'
 
 // ---------------------------------------------------------------------------
+// Dates cross a namespace here the way form keys do. A date input holds
+// `2002-08-14`; a PAN prints `14-08-2002`. `valuesAgree` compares the first
+// number it finds, so handing it the two forms unchanged reads 2002 against 14
+// and reports a discrepancy on a date that matches perfectly.
+// ---------------------------------------------------------------------------
+const isoFromPrinted = (d: string): string => {
+  const m = d.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : ''
+}
+const printedFromIso = (d: string): string => {
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : d
+}
+
+// ---------------------------------------------------------------------------
 // CJ-08 · Your details
 // ---------------------------------------------------------------------------
+/** The PAN evidences who you are. The label repeats in P1, so the bucket is
+ *  part of the match — see `DeclarationSpec.backingBucket`. */
+const PROFILE_DOC = /^PAN$/i
+const PROFILE_BUCKET = /^E1$/
+
 export function Profile({ app }: { app: Application }) {
   const nav = useNavigate()
   const { milestone } = useJourney({ appId: app.appId, partyRole: 'applicant', surface: 'customer' })
+  const declare = useDeclaration(app, {
+    section: 'applicant',
+    group: 'Identity (E1)',
+    backingMatch: PROFILE_DOC,
+    backingBucket: PROFILE_BUCKET,
+  })
   const me = app.parties.find((p) => p.role === 'applicant')
 
   const [name, setName] = useState(me?.name === 'New applicant' ? '' : (me?.name ?? ''))
@@ -60,6 +86,16 @@ export function Profile({ app }: { app: Application }) {
     setErrors(e)
     if (Object.keys(e).length) return
 
+    // Only the three facts the PAN can actually evidence. Address, city and PIN
+    // are evidenced by the Aadhaar — a different document in the same bucket —
+    // so declaring them against the PAN would create an obligation that the
+    // document collected at CJ-28 could never discharge.
+    declare.commit([
+      { key: 'name', label: 'Full name', value: name, fromKey: 'name' },
+      { key: 'dob', label: 'Date of birth', value: printedFromIso(dob), fromKey: 'dob' },
+      { key: 'pan', label: 'PAN', value: pan.toUpperCase(), fromKey: 'pan' },
+    ])
+
     milestone('PROFILE SUBMITTED', `${name.trim()} · PAN on file · ${city || pin}`, (a) => {
       a.studentName = name.trim()
       const p = a.parties.find((x) => x.role === 'applicant')
@@ -74,6 +110,25 @@ export function Profile({ app }: { app: Application }) {
       <ScreenTitle
         title="About you"
         intro="Enter these exactly as they appear on your documents — a mismatch later means re-doing this."
+      />
+
+      <SmartFill
+        app={app}
+        match={PROFILE_DOC}
+        bucket={PROFILE_BUCKET}
+        noun="your PAN"
+        onExtracted={(f) => {
+          // Prefilled, not committed. 'as printed' is the reader's placeholder
+          // for a field it has no context for, and 'New applicant' is the
+          // draft's own stand-in — neither is a name to put in front of someone.
+          if (f.name && f.name !== 'as printed' && f.name !== 'New applicant') setName(f.name)
+          if (f.pan && f.pan !== 'as printed') setPan(f.pan.toUpperCase())
+          if (f.dob) {
+            const iso = isoFromPrinted(f.dob)
+            if (iso) setDob(iso)
+          }
+        }}
+        onComplete={declare.onSwarmComplete}
       />
 
       <GField label="Full name" error={errors.name} htmlFor="d-name">
@@ -262,9 +317,46 @@ export function Academics({ app }: { app: Application }) {
 // ---------------------------------------------------------------------------
 // CJ-10 · Admission & tests
 // ---------------------------------------------------------------------------
+/** The I-20 evidences the SEVIS ID. The test scores on the same screen come off
+ *  the score reports in E4 — different documents, so a second backing. */
+const ADMISSION_DOC = /^I-20 \(USA F-1\) with SEVIS ID$/i
+const ADMISSION_BUCKET = /^E5$/
+
+const SCORECARD_BUCKET = /^E4$/
+const LANGUAGE_DOC = /^IELTS\/TOEFL-iBT$/i
+/** All of E4's score reports, as the backing for the scores as a group. Which
+ *  ONE the customer actually uploads decides which fields get a reading; the
+ *  rest stay owed. */
+const SCORECARD_DOCS = /^(GRE General|GRE Subject|GMAT\/GMAT-Focus\/EA|LSAT|IELTS\/TOEFL-iBT)$/i
+
+/** Which entrance test this programme sits, following the checklist's own
+ *  conditionality (E4: GRE for MS/MA/PhD, GMAT for MBA/MSc-Mgmt, LSAT for JD).
+ *  Offering all three would ask someone to pick a document they don't have. */
+function entranceDocFor(program: string): RegExp {
+  const p = program.toLowerCase()
+  if (/\bmba\b|manage/.test(p)) return /^GMAT\/GMAT-Focus\/EA$/i
+  if (/\bjd\b|\blaw\b/.test(p)) return /^LSAT$/i
+  return /^GRE General$/i
+}
+
 export function Admission({ app }: { app: Application }) {
   const nav = useNavigate()
   const { milestone } = useJourney({ appId: app.appId, partyRole: 'applicant', surface: 'customer' })
+  const declare = useDeclaration(app, {
+    section: 'applicant',
+    group: 'Admission (E5)',
+    backingMatch: ADMISSION_DOC,
+    backingBucket: ADMISSION_BUCKET,
+  })
+  const scores = useDeclaration(app, {
+    section: 'applicant',
+    group: 'Entrance & language (E4)',
+    backingMatch: SCORECARD_DOCS,
+    backingBucket: SCORECARD_BUCKET,
+  })
+  // Stable identity — a regex literal rebuilt each render would churn
+  // SmartFill's document useMemo on every keystroke.
+  const entranceDoc = useMemo(() => entranceDocFor(app.program), [app.program])
 
   const [admitStatus, setAdmitStatus] = useState<'unconditional' | 'conditional' | 'awaiting'>(
     'unconditional',
@@ -275,10 +367,40 @@ export function Admission({ app }: { app: Application }) {
 
   const TESTS = ['GRE', 'GMAT', 'LSAT', 'IELTS', 'TOEFL']
 
+  /** One handler for every score report — whichever shape the reader used, only
+   *  the keys it actually returned are applied. */
+  function applyScores(f: Record<string, string>) {
+    setTests((t) => ({
+      ...t,
+      ...(f.gre ? { GRE: f.gre } : {}),
+      ...(f.gmat ? { GMAT: f.gmat } : {}),
+      ...(f.lsat ? { LSAT: f.lsat } : {}),
+      ...(f.ielts ? { IELTS: f.ielts } : {}),
+      ...(f.toefl ? { TOEFL: f.toefl } : {}),
+    }))
+  }
+
   function next() {
     const taken = Object.entries(tests)
       .filter(([, v]) => v.trim())
       .map(([k, v]) => `${k} ${v}`)
+
+    // Empty values are dropped by the builders, so a customer still waiting on
+    // their I-20 declares nothing here rather than an empty obligation.
+    declare.commit([{ key: 'sevis', label: 'SEVIS ID', value: sevis, fromKey: 'sevis' }])
+
+    // The scores previously lived only inside the audit remark — the same gap
+    // Academics had. On the test-optional route there is nothing to declare.
+    if (!testOptional) {
+      scores.commit([
+        { key: 'gre', label: 'GRE', value: tests.GRE ?? '', fromKey: 'gre' },
+        { key: 'gmat', label: 'GMAT', value: tests.GMAT ?? '', fromKey: 'gmat' },
+        { key: 'lsat', label: 'LSAT', value: tests.LSAT ?? '', fromKey: 'lsat' },
+        { key: 'ielts', label: 'IELTS', value: tests.IELTS ?? '', fromKey: 'ielts' },
+        { key: 'toefl', label: 'TOEFL', value: tests.TOEFL ?? '', fromKey: 'toefl' },
+      ])
+    }
+
     milestone(
       'ADMISSION SUBMITTED',
       `${admitStatus} admit${sevis ? ` · SEVIS ${sevis}` : ''}${
@@ -294,6 +416,17 @@ export function Admission({ app }: { app: Application }) {
       <ScreenTitle
         title="Your admission"
         intro="If you already have your I-20, the details on it are what matter most."
+      />
+
+      <SmartFill
+        app={app}
+        match={ADMISSION_DOC}
+        bucket={ADMISSION_BUCKET}
+        noun="your I-20"
+        onExtracted={(f) => {
+          if (f.sevis) setSevis(f.sevis.toUpperCase())
+        }}
+        onComplete={declare.onSwarmComplete}
       />
 
       <SectionHeading>Where are you with the admission?</SectionHeading>
@@ -338,6 +471,22 @@ export function Admission({ app }: { app: Application }) {
 
       {!testOptional ? (
         <div className="mt-2">
+          <SmartFill
+            app={app}
+            match={entranceDoc}
+            bucket={SCORECARD_BUCKET}
+            noun="your entrance score report"
+            onExtracted={applyScores}
+            onComplete={scores.onSwarmComplete}
+          />
+          <SmartFill
+            app={app}
+            match={LANGUAGE_DOC}
+            bucket={SCORECARD_BUCKET}
+            noun="your IELTS or TOEFL report"
+            onExtracted={applyScores}
+            onComplete={scores.onSwarmComplete}
+          />
           {TESTS.map((t) => (
             <GField key={t} label={t} htmlFor={`ad-${t}`}>
               <GInput
@@ -373,12 +522,23 @@ export function Admission({ app }: { app: Application }) {
 // ---------------------------------------------------------------------------
 // CJ-11 · Add your parent
 // ---------------------------------------------------------------------------
+/** The parent's own PAN, in P1 — NOT the student's identical "PAN" label in E1. */
+const COAPP_PAN_DOC = /^PAN$/i
+const COAPP_PAN_BUCKET = /^P1$/
+
 export function AddParent({ app }: { app: Application }) {
   const nav = useNavigate()
   const { emit, milestone } = useJourney({
     appId: app.appId,
     partyRole: 'applicant',
     surface: 'customer',
+  })
+  // Every hook runs before the `joined` / `existing` early returns below.
+  const declare = useDeclaration(app, {
+    section: 'co_applicant',
+    group: 'Identity & relationship (P1)',
+    backingMatch: COAPP_PAN_DOC,
+    backingBucket: COAPP_PAN_BUCKET,
   })
   const createInvite = useSessionStore((s) => s.createInvite)
   const invites = useSessionStore((s) => s.invites)
@@ -410,6 +570,11 @@ export function AddParent({ app }: { app: Application }) {
       email: email.trim(),
       channel,
     })
+    // The name the student gives us for their parent, owed against the parent's
+    // own PAN. Relationship is deliberately not declared here — a PAN does not
+    // state it, the relationship proof in the same bucket does.
+    declare.commit([{ key: 'name', label: 'Full name', value: name, fromKey: 'name' }])
+
     emit(
       'COAPPLICANT_INVITED',
       { name: name.trim(), relationship, channel, inviteId: invite.id },
@@ -470,6 +635,20 @@ export function AddParent({ app }: { app: Application }) {
       <ScreenTitle
         title="Add your parent as co-applicant"
         intro="You’re the borrower, but the bank assesses a parent’s income. They get their own private link — you won’t see their documents or their income figures."
+      />
+
+      <SmartFill
+        app={app}
+        match={COAPP_PAN_DOC}
+        bucket={COAPP_PAN_BUCKET}
+        noun="their PAN"
+        onExtracted={(f) => {
+          // Until the parent joins there is no name on file for the reader to
+          // return, so this arrives as the placeholder and is skipped rather
+          // than filled with the student's own name.
+          if (f.name && f.name !== 'as printed') setName(f.name)
+        }}
+        onComplete={declare.onSwarmComplete}
       />
 
       <GField label="Their name" error={errors.name} htmlFor="p-name">

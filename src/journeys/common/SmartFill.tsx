@@ -27,6 +27,14 @@ export interface SmartFillProps {
   app: Application
   /** Which checklist document backs this screen. First match wins. */
   match: RegExp
+  /** Exact document, bypassing `match`/`bucket`. CJ-28 works from the
+   *  `backingDocIds` already recorded on a field, so it knows the id and should
+   *  not have to reverse it into a label pattern. */
+  docId?: string
+  /** Scopes `match` to one bucket. Labels repeat across sections — "PAN" is a
+   *  document in both E1 and P1 — and without this the parent's screen would
+   *  read the student's PAN. */
+  bucket?: RegExp
   /** What to call it in the offer line — "your PAN", "your marksheets". */
   noun: string
   /** Extracted key → value, handed to the parent to apply to its own fields. */
@@ -35,7 +43,15 @@ export interface SmartFillProps {
   onComplete?: (results: AgentResults, doc: DocumentItem, capture: CaptureResult) => void
 }
 
-export function SmartFill({ app, match, noun, onExtracted, onComplete }: SmartFillProps) {
+export function SmartFill({
+  app,
+  match,
+  docId,
+  bucket,
+  noun,
+  onExtracted,
+  onComplete,
+}: SmartFillProps) {
   const [phase, setPhase] = useState<'offer' | 'running' | 'filled' | 'skipped'>('offer')
   const [error, setError] = useState<string | null>(null)
   const [retake, setRetake] = useState<string | null>(null)
@@ -43,14 +59,20 @@ export function SmartFill({ app, match, noun, onExtracted, onComplete }: SmartFi
   const [count, setCount] = useState(0)
 
   const doc = useMemo(
-    () => app.documents.find((d) => match.test(d.label)),
-    [app.documents, match],
+    () =>
+      docId
+        ? app.documents.find((d) => d.id === docId)
+        : app.documents.find((d) => match.test(d.label) && (!bucket || bucket.test(d.bucketId))),
+    [app.documents, match, docId, bucket],
   )
 
   // Every hook runs unconditionally — the "no such document" case is handled
   // after them, not by an early return above them.
   const capture = useMemo(
-    () => (doc && picked ? runCapture(doc, picked.fileName, picked.sizeKb, extractionContext(app)) : null),
+    () =>
+      doc && picked
+        ? runCapture(doc, picked.fileName, picked.sizeKb, extractionContext(app, doc))
+        : null,
     [app, doc, picked],
   )
   const results = useMemo<AgentResults>(

@@ -9,7 +9,7 @@
 // and validation writes real `ValidationResult`s against the existing 73-rule
 // catalogue. Neither invents a parallel model of the truth.
 // ============================================================================
-import type { Application, DocumentItem, ValidationResult } from '@/types'
+import type { Application, DocumentItem, PartyRole, ValidationResult } from '@/types'
 import type { CaptureResult } from '@/types/journeys'
 import type { AgentFinding, AgentResult } from './types'
 import { draw, finding, result } from './runtime'
@@ -48,11 +48,30 @@ export interface ExtractionOutput {
 }
 
 /** What the reader can legitimately know about this file, so a prefilled form
- *  shows the customer's own name and university rather than a placeholder. */
-export function extractionContext(app: Application): ExtractionContext {
-  const student = app.parties.find((p) => p.role === 'applicant')?.name ?? app.studentName
+ *  shows the customer's own name and university rather than a placeholder.
+ *
+ *  Pass the document: identity fields belong to WHOEVER the document is about,
+ *  and a co-applicant's PAN carries the parent's name, not the student's.
+ *  Defaulting one to the other is the same mistake `institution` already cost
+ *  us — a form confidently prefilled with the wrong person. Where that party
+ *  has not joined yet there is genuinely no name to read, so the field falls
+ *  back to the placeholder and the screen's prefill handler skips it. */
+export function extractionContext(app: Application, doc?: DocumentItem): ExtractionContext {
+  const section = doc
+    ? app.buckets.find((b) => b.id === doc.bucketId)?.section
+    : 'applicant'
+  const role: PartyRole | null =
+    section === 'co_applicant'
+      ? 'co_applicant'
+      : section === 'collateral'
+        ? 'collateral_provider'
+        : null
+  const owner = role
+    ? app.parties.find((p) => p.role === role)?.name
+    : (app.parties.find((p) => p.role === 'applicant')?.name ?? app.studentName)
+
   return {
-    studentName: student,
+    studentName: owner,
     // The destination university — used on COA and I-20 shapes, which are
     // genuinely about that institution. Deliberately NOT used for `institution`,
     // which is where the undergraduate degree came from.
@@ -67,7 +86,9 @@ export function runExtraction(
   capture: CaptureResult,
 ): AgentResult {
   const seed = `${doc.id}|${capture.fileName}|${capture.sizeKb}`
-  const fields = extractFields(doc, seed, extractionContext(app))
+  // WITH the document. These fields are what the form is prefilled from, so
+  // dropping it here reads the co-applicant's PAN as the student.
+  const fields = extractFields(doc, seed, extractionContext(app, doc))
 
   const findings: AgentFinding[] = []
   const unsure = fields.filter((f) => f.uncertain)

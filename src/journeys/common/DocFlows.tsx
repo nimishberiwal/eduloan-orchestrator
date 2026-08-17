@@ -3,9 +3,13 @@
 // host screen. Party-agnostic — the co-applicant and collateral portals mount
 // exactly these components with a different `forParty`.
 // ============================================================================
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Application, ConsentType, DocumentItem, PartyRole } from '@/types'
 import type { CaptureResult } from '@/types/journeys'
+import type { AgentResults } from '@/lib/agents/types'
+import { AgentSwarm } from '@/journeys/common/AgentSwarm'
+import { planRun } from '@/lib/agents/runtime'
+import { extractionContext, runDocumentSwarm } from '@/lib/agents/documents'
 import {
   ActionBar,
   Callout,
@@ -131,14 +135,38 @@ export function Capture({
 }: {
   app: Application
   docId: string
-  onAccepted: (result: CaptureResult) => void
+  onAccepted: (result: CaptureResult, results: AgentResults) => void
   onRejected: (result: CaptureResult) => void
   onBack: () => void
 }) {
   const doc = app.documents.find((d) => d.id === docId)
   const [error, setError] = useState<string | null>(null)
   const [retake, setRetake] = useState<CaptureResult | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [picked, setPicked] = useState<{ fileName: string; sizeKb: number } | null>(null)
+  const [runs, setRuns] = useState(0)
+
+  // Every hook runs unconditionally — the "no such document" case is handled
+  // AFTER them, not by an early return above them.
+  const capture = useMemo(
+    () =>
+      doc && picked
+        ? runCapture(doc, picked.fileName, picked.sizeKb, extractionContext(app, doc))
+        : null,
+    [app, doc, picked],
+  )
+  const results = useMemo<AgentResults>(
+    () => (doc && capture ? (runDocumentSwarm(app, doc, capture) as AgentResults) : {}),
+    [app, doc, capture],
+  )
+  const plan = useMemo(
+    () =>
+      doc && picked
+        ? planRun('document', app.appId, `${doc.id}|${picked.fileName}|${picked.sizeKb}`, {
+            forCustomer: true,
+          })
+        : null,
+    [app.appId, doc, picked],
+  )
 
   if (!doc) {
     return (
@@ -158,16 +186,17 @@ export function Capture({
       setError(check.message ?? null)
       return
     }
-    setBusy(true)
-    const result = runCapture(doc!, fileName, sizeKb)
-    setBusy(false)
-    if (result.verdict === 'retake') {
-      setRetake(result)
-      onRejected(result)
+    // Quality gate BEFORE the agents, exactly as SmartFill does it — three
+    // lanes on a photo we already know is unreadable helps nobody.
+    const probe = runCapture(doc!, fileName, sizeKb)
+    if (probe.verdict === 'retake') {
+      setRetake(probe)
+      onRejected(probe)
       return
     }
     setRetake(null)
-    onAccepted(result)
+    setPicked({ fileName, sizeKb })
+    setRuns((r) => r + 1)
   }
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -175,6 +204,24 @@ export function Capture({
     if (!f) return
     handle(f.name, Math.max(1, Math.round(f.size / 1024)))
     e.target.value = ''
+  }
+
+  // The same three lanes the detail screens show. Most documents on a file
+  // arrive through THIS path, not through SmartFill, so running the swarm only
+  // on the six detail screens meant the agents were invisible for the majority
+  // of uploads — and their validation findings were never recorded.
+  if (picked && plan && capture) {
+    return (
+      <AgentSwarm
+        key={runs}
+        plan={plan}
+        results={results}
+        title="Checking your document"
+        intro="Three checks run at the same time. This takes a few seconds."
+        audience="customer"
+        onComplete={(r) => onAccepted(capture, r as AgentResults)}
+      />
+    )
   }
 
   return (
@@ -237,8 +284,6 @@ export function Capture({
         {POLICY.uploadMaxMb} MB
       </p>
 
-      {busy ? <p className="mt-3 text-[13px] text-[var(--grey-600)]">Checking the photo…</p> : null}
-
       <ActionBar>
         <GButton block tone="secondary" onClick={onBack}>
           Back
@@ -267,17 +312,27 @@ export function ConfirmDetails({
   onRetake: () => void
 }) {
   const doc = app.documents.find((d) => d.id === docId)
+  // WITH the context. Without it every identity-ish field on this screen read
+  // the literal placeholder — a customer confirming their passport was shown
+  // "Name: as printed". The fix landed in SmartFill and never reached the path
+  // that predates it, which is the path most documents actually take.
   const [fields, setFields] = useState<Record<string, string>>(() => {
     if (!doc) return {}
     return Object.fromEntries(
-      extractFields(doc, `${docId}|${capture?.fileName ?? ''}`).map((f) => [f.key, f.value]),
+      extractFields(doc, `${docId}|${capture?.fileName ?? ''}`, extractionContext(app, doc)).map(
+        (f) => [f.key, f.value],
+      ),
     )
   })
   const [showReassign, setShowReassign] = useState(false)
 
   if (!doc) return null
 
-  const shown = extractFields(doc, `${docId}|${capture?.fileName ?? ''}`)
+  const shown = extractFields(
+    doc,
+    `${docId}|${capture?.fileName ?? ''}`,
+    extractionContext(app, doc),
+  )
   const cls = capture?.classification
   const expected = doc.classification?.label ?? cls?.label
   // The classifier's vocabulary bottoms out at GENERIC_UPLOAD, which renders as

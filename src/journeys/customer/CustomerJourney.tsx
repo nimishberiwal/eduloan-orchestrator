@@ -25,6 +25,7 @@ import { Academics, AddParent, Admission, ParentInviteSent, Profile, Security } 
 import { ActionNeeded, SharingHub, Tasks, VerifyIdentity } from './Tasks'
 import { Closed, Submit, Track } from './Track'
 import { Agreement, Disbursement, Fee, Mandate, Sanction } from './PostSanction'
+import { VerifyDeclared } from './VerifyDeclared'
 import { FixValidation } from './FixValidation'
 import { liveRail } from './rail'
 
@@ -107,6 +108,7 @@ export function CustomerJourney() {
       <Route path="fee" element={<Fee app={app} />} />
       <Route path="agreement" element={<Agreement app={app} />} />
       <Route path="mandate" element={<Mandate app={app} />} />
+      <Route path="verify" element={<VerifyDeclared app={app} />} />
       <Route path="disbursement" element={<Disbursement app={app} />} />
       <Route path="closed" element={<Closed app={app} />} />
 
@@ -153,8 +155,9 @@ export function CaptureHost({
   // These hosts are mounted by the portals too, so the rail follows the PARTY.
   const steps = partyRole === 'applicant' ? liveRail(app) : undefined
   const home = partyRole === 'applicant' ? '/apply' : root
-  const { emit } = useJourney({ appId: app.appId, partyRole, surface })
+  const { emit, actor } = useJourney({ appId: app.appId, partyRole, surface })
   const reassignDocument = useStore((s) => s.reassignDocument)
+  const recordFindings = useStore((s) => s.recordAgentFindings)
   const doc = app.documents.find((d) => d.id === docId)
   const wasRejected = doc?.status === 'rejected' || doc?.status === 'qc_fail'
 
@@ -164,13 +167,15 @@ export function CaptureHost({
         <Capture
           app={app}
           docId={docId!}
-          onAccepted={(r) => {
+          onAccepted={(r, agents) => {
             setResult(r)
             emit(
               wasRejected ? 'DOCUMENT_REPLACED' : 'DOCUMENT_UPLOADED',
               { docId: r.docId, fileName: r.fileName, sizeKb: r.sizeKb },
               `${r.docId}:${r.fileName}:${r.sizeKb}`,
             )
+            // What the fraud and validation lanes found lands on the file.
+            recordFindings(app.appId, r.docId, agents, actor)
           }}
           onRejected={(r) =>
             emit(

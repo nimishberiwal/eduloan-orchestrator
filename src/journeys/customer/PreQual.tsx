@@ -38,7 +38,20 @@ import {
 } from '@/lib/eligibility'
 import { fmtDate } from '@/lib/format'
 import { useJourney } from '@/journeys/useJourney'
+import { useDeclaration } from '@/journeys/useDeclaration'
+import { SmartFill } from '@/journeys/common/SmartFill'
 import { PREQUAL_DEFAULTS, useSessionStore } from '@/store/sessionStore'
+
+/** 'US$62,400' / '₹2,11,400' → 62400 / 211400. The reader prints money the way
+ *  the document does; the fields on these screens hold plain numbers. */
+const moneyToNumber = (v: string): number => Number(v.replace(/[^\d.]/g, '')) || 0
+
+/** `US_UNIVERSITIES` is in the order it was built — the original 14, then the FT
+ *  Global MBA Ranking 2026 additions in FT rank order. That was scannable at 14
+ *  entries and is not at 45: someone looking for Yale has to read the whole
+ *  list. Sorted for DISPLAY only; the underlying array keeps its order, which
+ *  other code reads. */
+const UNIVERSITY_OPTIONS = [...US_UNIVERSITIES].sort((a, b) => a.name.localeCompare(b.name))
 
 const INTAKES: { id: Intake; label: string; start: string }[] = [
   { id: 'Spring-2026', label: 'Spring 2026', start: '2026-01-12T00:00:00.000Z' },
@@ -116,7 +129,7 @@ export function Plan({ app }: { app: Application }) {
           }}
         >
           <option value="">Choose, or enter another below</option>
-          {US_UNIVERSITIES.map((u) => (
+          {UNIVERSITY_OPTIONS.map((u) => (
             <option key={u.name} value={u.name}>
               {u.name}
             </option>
@@ -187,9 +200,18 @@ export function Plan({ app }: { app: Application }) {
 // ---------------------------------------------------------------------------
 // CJ-05 · Cost & ask
 // ---------------------------------------------------------------------------
+const COST_DOC = /^University COA per academic year$/i
+const COST_BUCKET = /^E6$/
+
 export function Cost({ app }: { app: Application }) {
   const nav = useNavigate()
   const { milestone } = useJourney({ appId: app.appId, partyRole: 'applicant', surface: 'customer' })
+  const declare = useDeclaration(app, {
+    section: 'applicant',
+    group: 'Cost of Attendance (E6)',
+    backingMatch: COST_DOC,
+    backingBucket: COST_BUCKET,
+  })
   const saved = useSessionStore((s) => s.prequal[app.appId]) ?? PREQUAL_DEFAULTS
   const setPreQual = useSessionStore((s) => s.setPreQual)
 
@@ -203,6 +225,23 @@ export function Cost({ app }: { app: Application }) {
   const effectiveAsk = touchedAsk ? askInr : suggested
 
   function next() {
+    // Evidenced only, deliberately. This screen invites an estimate — "take
+    // these off your cost-of-attendance page, estimates are fine for now" — and
+    // a self-declared field becomes a condition of disbursement once the Phase C
+    // gate lands. Turning an invited guess into a payment blocker, which a 1%
+    // tolerance against the real COA would almost always trip, is not a thing to
+    // do to someone. A figure actually read off the COA is a fact and is kept.
+    if (declare.evidenced) {
+      declare.commit([
+        {
+          key: 'coa_year',
+          label: 'Cost of attendance, per year',
+          value: usdFull(coaUsd),
+          fromKey: 'total',
+        },
+      ])
+    }
+
     milestone(
       'COST AND ASK CAPTURED',
       `Course cost ${usdFull(coaUsd)}/yr · own funds ${inrFull(ownInr)} · asking ${inrFull(effectiveAsk)}`,
@@ -220,6 +259,17 @@ export function Cost({ app }: { app: Application }) {
       <ScreenTitle
         title="What will it cost?"
         intro="Take these off your university’s cost-of-attendance page. Estimates are fine for now — we’ll check against your I-20 later."
+      />
+
+      <SmartFill
+        app={app}
+        match={COST_DOC}
+        bucket={COST_BUCKET}
+        noun="your university’s cost sheet"
+        onExtracted={(f) => {
+          if (f.total) setCoaUsd(moneyToNumber(f.total))
+        }}
+        onComplete={declare.onSwarmComplete}
       />
 
       <GField
@@ -282,9 +332,20 @@ export function Cost({ app }: { app: Application }) {
 // ---------------------------------------------------------------------------
 // CJ-06 · Co-applicant snapshot
 // ---------------------------------------------------------------------------
+/** P2 is the salaried income bucket, so this document only exists on a salaried
+ *  file — the self-employed branch is P3 and has no payslips to read. */
+const PARENT_INCOME_DOC = /^3 payslips$/i
+const PARENT_INCOME_BUCKET = /^P2$/
+
 export function ParentSnapshot({ app }: { app: Application }) {
   const nav = useNavigate()
   const { milestone } = useJourney({ appId: app.appId, partyRole: 'applicant', surface: 'customer' })
+  const declare = useDeclaration(app, {
+    section: 'co_applicant',
+    group: 'Income — salaried (P2)',
+    backingMatch: PARENT_INCOME_DOC,
+    backingBucket: PARENT_INCOME_BUCKET,
+  })
   const saved = useSessionStore((s) => s.prequal[app.appId]) ?? PREQUAL_DEFAULTS
   const setPreQual = useSessionStore((s) => s.setPreQual)
 
@@ -294,6 +355,20 @@ export function ParentSnapshot({ app }: { app: Application }) {
   const [nri, setNri] = useState(app.nriOverlay)
 
   function next() {
+    // Evidenced only, for the same reason as CJ-05: this screen asks for a
+    // rough figure ("they'll confirm their own details later, privately"), and
+    // a rough figure must not become a condition of disbursement.
+    if (declare.evidenced) {
+      declare.commit([
+        {
+          key: 'monthly_income',
+          label: 'Monthly income',
+          value: inrFull(monthly),
+          fromKey: 'net',
+        },
+      ])
+    }
+
     milestone(
       'CO-APPLICANT SNAPSHOT CAPTURED',
       `${incomeType === 'salaried' ? 'Salaried' : 'Self-employed'}${nri ? ' · NRI' : ''} — indicative income ${inrFull(monthly)}/month`,
@@ -334,6 +409,19 @@ export function ParentSnapshot({ app }: { app: Application }) {
           detail="They run a business or practise professionally."
         />
       </div>
+
+      {incomeType === 'salaried' ? (
+        <SmartFill
+          app={app}
+          match={PARENT_INCOME_DOC}
+          bucket={PARENT_INCOME_BUCKET}
+          noun="one of their payslips"
+          onExtracted={(f) => {
+            if (f.net) setMonthly(moneyToNumber(f.net))
+          }}
+          onComplete={declare.onSwarmComplete}
+        />
+      ) : null}
 
       <GField label="Roughly, their monthly income" htmlFor="f-inc">
         <GNumber id="f-inc" prefix="₹" value={monthly} onValue={setMonthly} />
@@ -420,6 +508,22 @@ export function Offer({ app }: { app: Application }) {
             ? 'Premier-Overlay-Unsecured'
             : 'Tier-3'
         if (offer.premierOverlay) {
+          // The basis LABEL is derived from the band alone, which is only
+          // honest while `rank` in US_UNIVERSITIES is a global university rank.
+          // If a programme-specific table is ever used for `rank` — the FT
+          // Global MBA Ranking was proposed and rejected, see the comment above
+          // US_UNIVERSITIES — this line would stamp `Global-Rank-Top-50` on a
+          // decision that consulted no such ranking, and it renders to a
+          // reviewer on the Decision tab and the Tier chip. `OverlayBasis`
+          // already carries `'Programmatic-Top'` for that case, and POLICY's
+          // own note allows it; the label must move with the source.
+          //
+          // BUT NOT BY EDITING THE TERNARY BELOW. The same expression appears
+          // twice — once as the audit LABEL, once as the KEY into
+          // `POLICY.premierOverlayCeilings`, which holds only the two
+          // Global-Rank entries. Retarget the label alone and the ceiling
+          // lookup returns undefined, so `overlayCeilingInr` becomes NaN and
+          // the file carries no ceiling at all. Decouple the two first.
           a.overlayBasis = offer.premierOverlay === 'top50' ? 'Global-Rank-Top-50' : 'Global-Rank-Top-100'
           a.overlayCeilingInr = Number(
             POLICY.premierOverlayCeilings[
