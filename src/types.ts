@@ -238,6 +238,13 @@ export interface ExtractedField {
   extractedValue: string
   match: MatchState
   derived?: boolean // ƒ badge
+  /** v5 — the customer typed this and skipped the upload, so `extractedValue`
+   *  is empty and `match` is 'pending' until a document evidences it. This is
+   *  what the post-decision verification screen works from. Optional, so the
+   *  14 seed literals compile untouched. */
+  selfDeclared?: boolean
+  /** v5 — which checklist documents would evidence this field. */
+  backingDocIds?: string[]
 }
 
 // ---- Validation catalogue (§10) --------------------------------------------

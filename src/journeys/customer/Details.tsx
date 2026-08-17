@@ -28,6 +28,8 @@ import {
 } from '@/journeys/common/glib'
 import { draftRail } from './rail'
 import { useJourney } from '@/journeys/useJourney'
+import { useDeclaration } from '@/journeys/useDeclaration'
+import { SmartFill } from '@/journeys/common/SmartFill'
 import { useSessionStore } from '@/store/sessionStore'
 import { POLICY } from '@/data/policy'
 
@@ -129,9 +131,17 @@ export function Profile({ app }: { app: Application }) {
 // ---------------------------------------------------------------------------
 // CJ-09 · Academic history
 // ---------------------------------------------------------------------------
+/** The marksheet is what evidences everything on CJ-09. */
+const ACADEMIC_DOC = /UG marksheets all semesters/i
+
 export function Academics({ app }: { app: Application }) {
   const nav = useNavigate()
   const { milestone } = useJourney({ appId: app.appId, partyRole: 'applicant', surface: 'customer' })
+  const declare = useDeclaration(app, {
+    section: 'applicant',
+    group: 'Academic (E3)',
+    backingMatch: ACADEMIC_DOC,
+  })
 
   const [ugInstitution, setUg] = useState('')
   const [ugResult, setUgResult] = useState('')
@@ -150,9 +160,21 @@ export function Academics({ app }: { app: Application }) {
     setErrors(e)
     if (Object.keys(e).length) return
 
+    // Previously this screen persisted NOTHING — the values lived only inside
+    // the audit remark. They are now recorded as fields, either evidenced by
+    // the uploaded marksheet or self-declared and owed later.
+    declare.commit([
+      { key: 'ug_institution', label: 'Institution', value: ugInstitution, fromKey: 'institution' },
+      { key: 'ug_result', label: 'Result', value: ugResult, fromKey: 'result' },
+      { key: 'ug_year', label: 'Year finished', value: ugYear, fromKey: 'awardYear' },
+      { key: 'ug_backlogs', label: 'Backlogs outstanding', value: String(backlogs), fromKey: 'backlogs' },
+    ])
+
     milestone(
       'ACADEMICS SUBMITTED',
-      `${ugInstitution.trim()} · ${ugResult.trim()} · ${backlogs} backlog(s)${hasGap ? ' · gap declared' : ''}`,
+      `${ugInstitution.trim()} · ${ugResult.trim()} · ${backlogs} backlog(s)${hasGap ? ' · gap declared' : ''}${
+        declare.evidenced ? ' · read from the marksheet' : ' · self-declared'
+      }`,
     )
     nav(`/apply/${app.appId}/admission`)
   }
@@ -162,7 +184,21 @@ export function Academics({ app }: { app: Application }) {
       <BackLink to={`/apply/${app.appId}/profile`}>About you</BackLink>
       <ScreenTitle
         title="Your degree"
-        intro="Your undergraduate results. We’ll pull the marksheets themselves from DigiLocker if you let us."
+        intro="Your undergraduate results, as they appear on your marksheets."
+      />
+
+      <SmartFill
+        app={app}
+        match={ACADEMIC_DOC}
+        noun="your marksheets"
+        onExtracted={(f) => {
+          // Prefilled, not committed — every one of these is editable below.
+          if (f.institution && f.institution !== 'as printed') setUg(f.institution)
+          if (f.result) setUgResult(f.result)
+          if (f.awardYear) setUgYear(String(f.awardYear).slice(0, 4))
+          if (f.backlogs !== undefined) setBacklogs(Number(f.backlogs) || 0)
+        }}
+        onComplete={declare.onSwarmComplete}
       />
 
       <GField label="College or university" error={errors.ug} htmlFor="a-ug">

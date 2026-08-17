@@ -19,6 +19,7 @@ import { CollateralPortal } from '@/journeys/collateral/CollateralPortal'
 import { AssistedJourney } from '@/journeys/assisted/AssistedJourney'
 import { HandoffLanding } from '@/journeys/assisted/HandoffLanding'
 import { TaskInspector } from '@/journeys/dev/TaskInspector'
+import { AgentInspector } from '@/journeys/dev/AgentInspector'
 import { NotFound } from '@/journeys/common/NotFound'
 
 export function AppRoutes() {
@@ -43,8 +44,9 @@ export function AppRoutes() {
 
         <Route path="/console/*" element={<Console />} />
 
-        {/* Dev-only surfaces (§P2). Harmless in a build — they read state only. */}
+        {/* Dev-only surfaces (§P2, §Phase A). Harmless in a build — read-only. */}
         <Route path="/__dev/tasks" element={<TaskInspector />} />
+        <Route path="/__dev/agents" element={<AgentInspector />} />
         <Route path="/__dev/persona" element={<Navigate to="/" replace />} />
 
         <Route path="*" element={<NotFound />} />

@@ -162,7 +162,32 @@ const EXTRACTION_SHAPES: { match: RegExp; fields: { key: string; label: string }
     { key: 'name', label: 'Name' },
     { key: 'institution', label: 'Institution' },
     { key: 'result', label: 'Result' },
-    { key: 'year', label: 'Year' },
+    { key: 'awardYear', label: 'Year awarded' },
+    { key: 'backlogs', label: 'Backlogs outstanding' },
+  ] },
+  // Entrance and language tests. Without these an upload against a scorecard
+  // slot fell through to the two-field generic shape, so "upload instead of
+  // typing" could not prefill the very screen that asks for five scores.
+  { match: /GRE (General|Subject)|^GRE/i, fields: [
+    { key: 'name', label: 'Name' },
+    { key: 'gre', label: 'GRE total' },
+    { key: 'testDate', label: 'Test date' },
+  ] },
+  { match: /GMAT/i, fields: [
+    { key: 'name', label: 'Name' },
+    { key: 'gmat', label: 'GMAT total' },
+    { key: 'testDate', label: 'Test date' },
+  ] },
+  { match: /LSAT/i, fields: [
+    { key: 'name', label: 'Name' },
+    { key: 'lsat', label: 'LSAT score' },
+    { key: 'testDate', label: 'Test date' },
+  ] },
+  { match: /IELTS|TOEFL/i, fields: [
+    { key: 'name', label: 'Name' },
+    { key: 'ielts', label: 'IELTS band' },
+    { key: 'toefl', label: 'TOEFL total' },
+    { key: 'testDate', label: 'Test date' },
   ] },
   { match: /statement|account/i, fields: [
     { key: 'holder', label: 'Account holder' },
@@ -195,24 +220,62 @@ const SAMPLE: Record<string, string> = {
   month: 'June 2026',
   gross: '₹2,85,000',
   net: '₹2,11,400',
-  institution: 'as printed',
+  institution: 'Veermata Jijabai Technological Institute',
   result: '8.4 CGPA',
+  backlogs: '0',
+  awardYear: '2025',
+  gre: '329',
+  gmat: '710',
+  lsat: '164',
+  ielts: '7.5',
+  toefl: '112',
+  testDate: '18-06-2025',
   holder: 'as printed',
   bank: 'as printed',
   period: 'Jan–Jun 2026',
   closing: '₹4,86,210',
 }
 
-export function extractFields(doc: DocumentItem, seed: string): ExtractedFieldMock[] {
+/** What the reader can know about this file. Without it the identity-ish
+ *  fields fall back to the literal placeholder `'as printed'`, which reads as a
+ *  broken prefill on the very screens whose whole point is that the document
+ *  filled the form in. */
+export interface ExtractionContext {
+  studentName?: string
+  university?: string
+  institution?: string
+  employer?: string
+  programme?: string
+}
+
+export function extractFields(
+  doc: DocumentItem,
+  seed: string,
+  ctx: ExtractionContext = {},
+): ExtractedFieldMock[] {
   const shape = EXTRACTION_SHAPES.find((s) => s.match.test(doc.label))
   const fields = shape?.fields ?? [
     { key: 'name', label: 'Name' },
     { key: 'year', label: 'Date on the document' },
   ]
+  // Context wins over the constant sample, so a prefilled form shows the
+  // customer's own name and university rather than a placeholder.
+  const contextual: Record<string, string | undefined> = {
+    name: ctx.studentName,
+    holder: ctx.studentName,
+    university: ctx.university,
+    // NOT ctx.university — that is the university being applied TO. A marksheet
+    // comes from the undergraduate institution, and defaulting one to the other
+    // produced "your degree is from Purdue" on an application to Purdue.
+    institution: ctx.institution,
+    employer: ctx.employer,
+    programme: ctx.programme,
+  }
+
   return fields.slice(0, 8).map((f, i) => ({
     key: f.key,
     label: f.label,
-    value: SAMPLE[f.key] ?? '—',
+    value: contextual[f.key] ?? SAMPLE[f.key] ?? '—',
     // One field per document at most gets flagged, and only when the draw is
     // genuinely low — a page of "check this" flags teaches people to ignore it.
     uncertain: i === fields.length - 1 && draw(seed, `field:${f.key}`) < 0.18,
@@ -221,7 +284,12 @@ export function extractFields(doc: DocumentItem, seed: string): ExtractedFieldMo
 
 // ---- The whole capture -----------------------------------------------------
 
-export function runCapture(doc: DocumentItem, fileName: string, sizeKb: number): CaptureResult {
+export function runCapture(
+  doc: DocumentItem,
+  fileName: string,
+  sizeKb: number,
+  ctx: ExtractionContext = {},
+): CaptureResult {
   const quality = assessQuality(fileName, sizeKb)
   const reason = retakeReason(quality, sizeKb)
   const seed = `${doc.id}|${fileName}|${sizeKb}`
@@ -251,7 +319,7 @@ export function runCapture(doc: DocumentItem, fileName: string, sizeKb: number):
       // document is accepted and marked for a human (§12.2).
       ambiguous: cls.confidence < POLICY.lowConfidenceThreshold,
     },
-    extracted: Object.fromEntries(extractFields(doc, seed).map((f) => [f.key, f.value])),
+    extracted: Object.fromEntries(extractFields(doc, seed, ctx).map((f) => [f.key, f.value])),
   }
 }
 

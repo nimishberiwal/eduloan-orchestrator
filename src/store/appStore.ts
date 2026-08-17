@@ -24,7 +24,7 @@ import type {
   AuditRole, AutomationEvent, ClosureKind, ConsentType, EscalationEvent, StageRule,
 } from '@/types'
 import type { HitlStatus, HitlTrigger } from '@/types'
-import type { PartyRole } from '@/types'
+import type { ExtractedField, PartyRole } from '@/types'
 import type { HitlDecisions } from '@/lib/hitl'
 import type { JourneyActor, JourneyEvent } from '@/types/journeys'
 import {
@@ -33,6 +33,7 @@ import {
   type NewApplicationSpec,
 } from '@/journeys/newApplication'
 import { runJourneyResets } from '@/journeys/resetRegistry'
+import { mergeFields } from '@/lib/declared'
 import { CONSENT_BY_TYPE } from '@/data/consents'
 import { HITL_BY_TRIGGER } from '@/data/hitl'
 import { classifyDoc } from '@/data/classification'
@@ -224,6 +225,16 @@ interface Actions {
     actor: JourneyActor,
   ) => void
   requestTranche: (appId: string, trancheId: string, actor: JourneyActor) => void
+  /** §v5 — record what the customer told us on a detail screen. Typed values
+   *  arrive `selfDeclared`; evidenced ones arrive with both sides and a
+   *  computed match. Merged by field id, so re-doing a screen corrects rather
+   *  than duplicates. */
+  recordDeclaredFields: (
+    appId: string,
+    fields: ExtractedField[],
+    actor: JourneyActor,
+    note?: string,
+  ) => void
 }
 
 function audit(app: Application, e: Partial<Application['audit'][number]>): void {
@@ -1412,6 +1423,28 @@ export const useStore = create<State & Actions>((set, get) => ({
       return true
     })
     pushToast('info', 'Tranche request queued for the bank. Release stays a bank action.')
+  },
+
+  recordDeclaredFields: (appId, fields, actor, note) => {
+    if (fields.length === 0) return
+    mutate(set, appId, (app) => {
+      app.extracted = mergeFields(app.extracted, fields)
+      const declared = fields.filter((f) => f.selfDeclared).length
+      const checked = fields.filter((f) => f.match === 'pass').length
+      const clashed = fields.filter((f) => f.match === 'fail').length
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        verb: declared > 0 ? 'DETAILS DECLARED' : 'DETAILS EVIDENCED',
+        remarks: `${note ? `${note} — ` : ''}${fields.length} field(s)${
+          declared ? `, ${declared} self-declared` : ''
+        }${checked ? `, ${checked} matched the document` : ''}${
+          clashed ? `, ${clashed} DID NOT MATCH` : ''
+        }${actorSuffix(actor)}`,
+      })
+      app.lastCustomerActivityAt = nowIso()
+      return true
+    })
   },
 
   /** §16.3 — the reduction that keeps the two surfaces honest. This function
