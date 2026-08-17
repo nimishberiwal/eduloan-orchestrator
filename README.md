@@ -47,6 +47,8 @@ exactly — 214 applications, every session and link cleared.
 | `docs/ACCEPTANCE-JOURNEYS.md` | Journeys checklist — 18 items, plus every defect found and fixed |
 | `docs/API-CONTRACT.md` | The contract for a real LOS. Documented, nothing implemented |
 | `DECISIONS.md` | Every choice made where the spec was silent, and why |
+| `CHANGELOG.md` | What shipped in each version, what was verified, what is open |
+| `docs/RELEASING.md` | **No push without a version.** The procedure, and why |
 
 ## Stack
 Vite · React 18 · TypeScript (strict) · Tailwind v3 · Zustand · lucide-react.
