@@ -1,16 +1,28 @@
-# Handoff — v2 "agentic origination" (WORK IN PROGRESS, UNCOMMITTED)
+# V2 build notes — "agentic origination"
 
-**Written:** 2026-08-17
-**Status:** **`v1.1.0` was cut and pushed on 2026-08-17** — `origin/main` is at
-`8eb6d35`, tag `v1.1.0`. It is a **checkpoint** release: the corpus and all of
-Phase E, plus the Phase A/B/C-core snapshot at `1c60aaa`. The Phase B session's
-later work was uncommitted and **not compiling** when the version was cut, so it
-is deliberately **not** in v1.1.0 — it remains in the working tree for that
-session to commit and ship in the next version. v2 items 4 and 5 are not started.
-⚠️ **The GitHub Release is still outstanding** — GitHub's Releases API was
-returning 503 at the time. The tag and CHANGELOG are done; see §10.
-**Companion docs:** `HANDOFF-JOURNEYS.md` (v1, complete) · `docs/RELEASING.md` · `docs/API-CONTRACT.md` · `docs/ACCEPTANCE-JOURNEYS.md`
-**Design plan:** `~/.claude/plans/moving-on-to-the-precious-hoare.md` — the full approved design for all six v2 items. Read it before continuing.
+**Status: COMPLETE and shipped.** All six V2 developments are built, verified and
+tagged — item 6 in `v1.1.0`, items 1–5 in `v2.0.0`.
+
+> This file was the working handoff while V2 was under construction (as
+> `HANDOFF-V2-WIP.md`, written across three parallel sessions). It is kept as
+> the **build record**: what was decided and why, and the sixteen defects found
+> along the way. Several sections are written in the future tense of a
+> not-yet-done thing; they are left as they were rather than rewritten, because
+> the reasoning is the point.
+>
+> **For orientation, start with [VERSIONS.md](VERSIONS.md)**, not this file.
+> That is the short, current explanation of what V1 and V2 each are and how to
+> tell them apart in the code. This one is long, and it is history.
+
+**Companion docs:** [VERSIONS.md](VERSIONS.md) · `HANDOFF-JOURNEYS.md` (V1, complete) · [RELEASING.md](RELEASING.md) · [API-CONTRACT.md](API-CONTRACT.md) · [ACCEPTANCE-JOURNEYS.md](ACCEPTANCE-JOURNEYS.md)
+**Design plan:** `~/.claude/plans/moving-on-to-the-precious-hoare.md` — the full approved design for all six V2 items.
+
+**One correction preserved from the working revisions.** An earlier status line
+recorded the Phase B/C/D work as "not compiling" when `v1.1.0` was cut. It
+typechecked and built clean at every checkpoint; three sessions were editing one
+working tree, and a `tsc` run during another session's mid-save reported an
+error in `AgentInspector.tsx` that cleared on re-run. It was deliberately held
+back from that checkpoint release, not broken.
 
 ---
 
@@ -55,8 +67,8 @@ Six requested developments. Progress:
 | 1 | Upload-instead-of-typing + parallel-agent processing view | **Built and wired into all 6 screens** |
 | 2 | Three agents per upload (extraction · fraud · validation) | **Built and verified** |
 | 3 | Skip → self-declared → post-decision mandatory upload w/ cross-validation | **Built and verified** (CJ-28 + derived tranche-1 gate) |
-| 4 | Sanction-time CAM + letter + extras by parallel agents | **Not started** |
-| 5 | Pre-sanction customer message drafting agent | **Not started** |
+| 4 | Sanction-time CAM + letter + extras by parallel agents | **Built and verified** (Phase D — see §7) |
+| 5 | Pre-sanction customer message drafting agent | **Built and verified** (drafts only; officer approves) |
 | 6 | University news crawler agent with source links | **Built and verified** (Phase E — see §7) |
 
 ---
@@ -217,6 +229,7 @@ value first and watching the swarm overwrite it (COA 50000 → 62400, income
 | 13 | **The validation agent's output was discarded.** `runValidation` built real `ValidationResult`s off the real catalogue and nothing consumed `ValidationOutput` — so nothing the swarm found reached the Validations tab or `evaluateGate`, and `hasBlocking` was dead code. | `recordAgentFindings` persists them and `hasBlocking` picks the audit verb. See §7's closeout. |
 | 14 | **A 1% tolerance passed a wrong graduation year.** `valuesAgree` applied a proportional tolerance to every number, for one stated reason — a customer rounding 8.43 to 8.4. On a year that is ±20 years of slack, so entered "2024" against a marksheet reading 2025 came back `pass`. A different graduation year is exactly what an officer checks for gaps and course duration. | The tolerance now applies ONLY where one side is fractional; whole numbers compare exactly. A proportional tolerance is wrong for a quantity that is a label rather than a measurement. Nine cases re-checked: year fails, 8.43/8.4 still passes, money/DOB/prefix behaviour unchanged. Surfaced by CJ-28 — the first screen that re-checks a year against its document. |
 | 15 | **`discrepancies()` swept in pre-existing seeded mismatches.** It filtered `app.extracted` for any `match === 'fail'`, but the seed carries seven such fields (an I-20 name mismatch, a COA arithmetic delta, a bureau flag) that are console-side validation failures with their own rules and gates. Wiring the disbursement gate to it would have let one of those hold up a demo file through a gate about self-declared facts — **APP-2612, the only seeded application with tranches, carries one.** | Scoped to declaration-flow fields via `declarationFields()` (`backingDocIds` is set by both builders and nothing else). Verified: four seeded apps carry failed extracted fields and all four report `settled: true`. |
+| 16 | **There was no interest rate anywhere in the product.** `lib/eligibility.ts` carried a bare `10.5` inside a private helper, under a comment saying the sanction letter carried the real band. Phase D went to write that letter and found nothing to carry, while CJ-22 separately displayed a hardcoded `Floating, 9.75%–11.25%` — two different answers on screens a customer sees minutes apart. | `POLICY.sanctionRoi`, read by the indicative maths, the sanction letter, the KFS, the schedule, the outreach drafts and CJ-22. One figure. |
 
 ---
 
@@ -341,15 +354,58 @@ by the user**, so the full set is:
 | Internal risk note | Deviations, FOIR, tier/overlay basis, DoA band | Bank |
 | Pre-sanction outreach | Email + SMS + WhatsApp **drafts** (item 5) | Draft → officer approves |
 
-- New optional `app.generatedDocs` container (checklist `documents` are rows to
-  *collect*, not artifacts we *produce* — do not conflate them).
-- Messages are created as **drafts**, never sent; an officer approves each through
-  the existing `sendComm`.
-- Downloads go through the **existing** `deliver()` in `lib/csv.ts` —
-  `stampedName(base, iso, ext)` already takes a generic extension. No new dependency.
-- **Fix while here (pre-existing defects in `countersign`):** hardcoded `180` instead
-  of `POLICY.sanctionValidityDays`; hardcoded owning officer `'S. Kulkarni'`; inlined
-  sanction-issued comm body, which drops the `validity` token its own template carries.
+**STATE: BUILT AND VERIFIED** on APP-2610 (Arjun Desai, Georgia Tech, ₹44L).
+
+`src/lib/agents/sanction.ts` — the seven agents plus `sanctionTerms(app)`, which
+computes the loan ONCE so the letter, the KFS, the schedule and the SMS cannot
+quote four different numbers for the same loan. `app.generatedDocs` holds the six
+papers; the seventh writes drafts into `app.comms` with `status: 'draft'`.
+
+**Every number is derived, none invented.** Amount off the application, rate and
+moratorium off POLICY, covenants and deviations off the file's own collections.
+Where a value genuinely is not known the row says `not set on this file` rather
+than showing a plausible placeholder — a sanction letter carrying an invented
+figure is worse than one admitting the figure is not set.
+
+Verified arithmetic on ₹44,00,000 at 10.5%: 30 months interest-only at ₹38,500,
+then 150 instalments of ₹52,789; total interest ₹46,73,414; APR 10.57% (rate plus
+the 1% fee spread across the full term). Letter, KFS, schedule and the SMS draft
+all agree.
+
+**Three things this needed that did not exist:**
+
+| Addition | Why |
+|---|---|
+| `POLICY.sanctionRoi` | There was NO rate anywhere. `lib/eligibility.ts` had a bare `10.5` inside a private helper under the comment *"the sanction letter carries the real ROI band"* — and when the letter came to be written there was nothing to carry. Both now read POLICY, so the indicative maths and the formal papers cannot drift. |
+| `POLICY.courseMonthsByLevel` + `postCourseMoratoriumMonths` | `POLICY.moratorium` is a customer-facing sentence. A schedule needs a number, and the application carries `programLevel` but no duration. |
+| `CommStatus` gains `'draft'` | `'queued'` means it is going out. A drafted message is inert until an officer approves it, and the two must not look alike in a comms thread. |
+
+**Item 5 is enforced, not documented.** `approveOutreachDraft` / `discardOutreachDraft`
+are the only ways a draft leaves. Verified: SMS approved → `status: sent`, actor
+recorded; WhatsApp discarded → removed, `OUTREACH DISCARDED — discarded unsent`.
+
+**Surfaces.** Console gets a **Sanction pack** tab, with each paper labelled
+`bank only` / `shared with customer` and downloads through the existing
+`downloadText` + `stampedName`. CJ-22 shows only `audience === 'customer'` papers
+— filtered in code, not by convention, because the CAM and the risk note sit in
+the same container. Verified live: the customer screen shows the four customer
+papers and neither bank paper.
+
+**The three countersign defects are fixed:**
+
+| Was | Now |
+|---|---|
+| `plusDays(NOW_ISO, 180)` | `POLICY.sanctionValidityDays`. The literal appeared three times in that block — expiry, audit remark, customer letter — so a committee editing the policy would have moved one of three. |
+| `officer: 'S. Kulkarni'` | `PRIMARY_OFFICER.Credit.name`. Same person today; the file silently disagreed with the org chart the moment anyone edited `data/org.ts`. |
+| Inlined comm body | `COMM_TEMPLATE_BY_ID['sanction_issued'].render(...)`. The inlined copy dropped the `validity` token the template interpolates, so the customer's email omitted the one date the offer turns on. Now reads *"valid till Sat Jan 16 2027"*. |
+
+**One more found while here:** CJ-22 displayed a hardcoded `Floating, 9.75%–11.25%`
+while the letter and KFS quoted a single contracted rate from POLICY — two numbers
+for the same loan on two screens the customer sees minutes apart. Now reads POLICY.
+
+**Note on the ask:** the plan said downloads go through `deliver()` in `lib/csv.ts`.
+There is no `deliver()`; the function is `downloadText(filename, text, mime)`.
+Used that.
 
 ### Phase E — university intelligence (item 6) — **BUILT AND VERIFIED**
 

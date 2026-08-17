@@ -23,6 +23,142 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.0.0] — 2026-08-18
+
+**V2 complete.** Items 1–5 of the six agentic-origination developments; item 6
+shipped early in `1.1.0`. See [docs/VERSIONS.md](docs/VERSIONS.md) for what V1
+and V2 each are and how to tell them apart in the code.
+
+Major rather than minor because it changes how the demo is walked: every
+document upload now runs a visible three-agent swarm, countersign produces a
+six-paper sanction pack, and disbursement is gated on evidence that did not
+previously exist.
+
+### Added — upload instead of typing (items 1 & 2)
+
+- `SmartFill` on **all six** detail screens — CJ-05 Cost, CJ-06 Parent snapshot,
+  CJ-08 Profile, CJ-09 Academics, CJ-10 Admission, CJ-11 Add parent. Upload the
+  backing document and the form is prefilled and still editable.
+- CJ-10 additionally offers the **entrance score report** (chosen by programme —
+  GRE for MS/MA/PhD, GMAT for MBA/Mgmt, LSAT for JD, following the E4 bucket's
+  own conditionality) and the **IELTS/TOEFL report**.
+- The same three-agent swarm now runs on the **ordinary checklist upload**
+  (`DocFlows.Capture`), where most of a file's 97 documents actually arrive.
+  Previously the agents were visible only on six screens.
+- **Verified:** COA 50000 → 62400, income 90000 → 211400, PAN name/DOB/PAN,
+  SEVIS `N0031882745`, GRE 329, IELTS 7.5 + TOEFL 112 — each proved by setting
+  the field wrong first and watching the swarm correct it.
+
+### Added — self-declared data and its gate (item 3)
+
+- **CJ-28 "Check what you told us"** at `/apply/:id/verify`. Two lists, because
+  they are not the same problem: *Still to send* (an upload resolves it) and
+  *Doesn't match* (a contradiction an upload will not fix). The screen never
+  rewrites `enteredValue` — it is the thing being verified.
+- Discrepancies in plain language: *"You told us 9.1 CGPA for result; the
+  document says 8.4 CGPA."* Deliberately not a verdict — we do not know which
+  side is wrong.
+- **The condition of disbursement.** `gatesFor(app, tranche)` appends a derived
+  gate to tranche 1: the file sanctions and signs normally, and no money moves
+  until every self-declared fact is evidenced and nothing is contradicted.
+  Enforced at all three read sites — CJ-26, `releaseTranche`, and the console
+  Tranches tab — so the officer sees the gate the release check enforces.
+- **Verified** on APP-2901: two groups owed → PAN resolved 3/3 clean → marksheet
+  produced two genuine contradictions → gate `passed: false`.
+
+### Added — the sanction pack (items 4 & 5)
+
+- **Seven agents at countersign.** Six produce papers into a new
+  `app.generatedDocs`: credit assessment memo and internal risk note (bank),
+  sanction letter, Key Facts Statement, repayment schedule and conditions
+  schedule (customer). The seventh drafts outreach.
+- `sanctionTerms(app)` computes the loan **once**, so the letter, the KFS, the
+  schedule and the outreach cannot quote four different numbers for the same
+  loan.
+- **Outreach is drafted, never sent.** Drafts carry the new `CommStatus`
+  `'draft'` and leave only through `approveOutreachDraft`; `discardOutreachDraft`
+  removes one unsent. Both audited.
+- New console **Sanction pack** tab, each paper labelled `bank only` or
+  `shared with customer`, downloads through the existing `downloadText` +
+  `stampedName`. CJ-22 filters on `audience === 'customer'` **in code** — the
+  CAM and the risk note sit in the same container.
+- **Verified** on APP-2610 (₹44,00,000 at 10.5%): 30 months interest-only at
+  ₹38,500, then 150 instalments of ₹52,789; total interest ₹46,73,414; APR
+  10.57%. Letter, KFS, schedule and SMS all agree. Customer screen shows the
+  four customer papers and neither bank paper.
+
+### Fixed
+
+- **A 1% tolerance passed a wrong graduation year.** `valuesAgree` applied a
+  proportional tolerance to every number — written for CGPA rounding, but ±20
+  years of slack on a year, so entered `2024` against a marksheet reading `2025`
+  came back `pass`. The tolerance now applies only where one side is fractional.
+- **`discrepancies()` swept in pre-existing seeded mismatches.** The seed carries
+  seven `match: 'fail'` fields that are console-side validation failures with
+  their own rules; wiring the disbursement gate to them would have blocked
+  APP-2612 — the only seeded application with tranches. Now scoped to
+  declaration-flow fields.
+- **A co-applicant's PAN prefilled the student's name.** `extractionContext` had
+  no idea whose document it was describing. Fixed at **both** call sites — the
+  first fix missed `runExtraction`, which is the one feeding the form.
+- **A false discrepancy from our own placeholder** — entered "Rajesh Rao" against
+  a read of `"as printed"`, marked `fail`. Placeholders are no longer readings.
+- **`ConfirmDetails` showed customers `"as printed"`.** The `ExtractionContext`
+  fix had landed in `SmartFill` only, never reaching the older path most
+  documents take.
+- **The validation agent's output was discarded.** `runValidation` built real
+  `ValidationResult`s that nothing consumed. `recordAgentFindings` now persists
+  them to `app.validations`, which `evaluateGate` reads — a passport upload
+  failing `VAL-INT-04` genuinely holds the non-overridable S03 gate.
+- **`hasBlocking` was dead code**; it now selects the audit verb, so a
+  BLOCK-severity finding does not read like a warning.
+- **Three pre-existing `countersign` defects**: a hardcoded `180` instead of
+  `POLICY.sanctionValidityDays` (the literal appeared three times in one block);
+  a hardcoded owning officer instead of `PRIMARY_OFFICER.Credit`; and an inlined
+  comm body that dropped the `validity` token its own template carries, so the
+  customer's sanction email omitted the one date the offer turns on.
+- **There was no interest rate anywhere in the product.** A bare `10.5` sat in a
+  private helper under a comment saying the sanction letter carried the real
+  band; CJ-22 separately displayed a hardcoded `Floating, 9.75%–11.25%`. Now
+  `POLICY.sanctionRoi`, read by the indicative maths, all four generated papers,
+  the outreach drafts and CJ-22.
+- **"PAN" is a document in both E1 and P1.** `SmartFill`'s first-match-wins
+  handed co-applicant screens the student's PAN. Both the component and
+  `DeclarationSpec` now scope by bucket.
+- **The university dropdown** went from 14 to 45 entries in build order; sorted
+  alphabetically for display.
+
+### Changed
+
+- `ExtractedField` gains optional `sourceKey`; `Application` gains optional
+  `generatedDocs`; `CommStatus` gains `'draft'`; `App360Tab` gains `'papers'`.
+  All optional, so `data/seed.ts`'s 14 literals compile untouched.
+- `POLICY` gains `sanctionRoi`, `courseMonthsByLevel` and
+  `postCourseMoratoriumMonths`.
+
+### Known / open
+
+- **The fraud agent's score and signals are not surfaced.** They are counted in
+  the audit line but have nowhere to live on the application. Surfacing agent
+  findings on the Integrations and HITL views is Phase F, not built.
+- **`audit()` stamps `NOW_ISO`, the un-offset base clock**, not `nowIso()`. Any
+  audit line written after an operator advances the demo clock is stamped at the
+  base instant. Pre-existing and repo-wide; not addressed here.
+- **The 28-route internal-vocabulary scan was ad-hoc**, not a checked-in script.
+  It has not been re-run against CJ-28 or the Sanction pack tab.
+- No acceptance checklist was re-walked end to end for this release.
+
+### Verified
+
+| Gate | Result |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npm run build` | clean |
+| `node scripts/build-standalone.mjs` | clean — 0.91 MB self-contained |
+| Live walk | APP-2901 (items 1–3) and APP-2610 (items 4–5) |
+
+---
+
 ## [1.1.0] — 2026-08-17
 
 University intelligence (v2 item 6) and its researched corpus. A **checkpoint

@@ -20,6 +20,27 @@ Account Aggregator consent on their own device → documents vanish from the tas
 list → switch to the console and find the file in the Ops queue with an audit
 trail naming who did what.**
 
+## Two bodies of work — V1 and V2
+
+This prototype was built in two distinct commissions, and they are not the same
+kind of thing. **Read [docs/VERSIONS.md](docs/VERSIONS.md) first** — it is the
+short version of what each one is and how to tell them apart in the code.
+
+| | What it is | Shipped |
+|---|---|---|
+| **V1** | The origination **journeys** — the surfaces people touch | `v1.0.0` |
+| **V2** | **Agentic origination** — parallel agents on every upload, self-declared data with a disbursement gate, and a generated sanction pack | `v1.1.0` (item 6) + `v2.0.0` (items 1–5) |
+
+Two traps worth knowing before you read any comment in `src/`:
+
+- **"V2" is a body of work, not a version number.** Its sixth development
+  shipped early, inside `v1.1.0`.
+- **`§v2` and `§v3` in comments are the *console's* history**, not this split.
+  V1 is marked `§v4`; V2 is marked `§v5` and `§Phase A`–`§Phase E`.
+
+The V2 build record, including the sixteen defects found while building it, is
+in [docs/V2-BUILD-NOTES.md](docs/V2-BUILD-NOTES.md).
+
 ## Run
 
 ```bash
