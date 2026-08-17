@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --app-bg: #f1f3f9; /* cool light app canvas */
+    --surface: #ffffff;
+    --line: #e6e9f0;
+
+    /* ---- Glib.money brand tokens (§3.1) ---------------------------------
+       Proportion rule from the guidelines: Glib Grey is the base and most
+       used; white for backgrounds; Glib Blue is the ACCENT, not a background
+       wash; Blue Grey adds support elements. Do not build blue-flooded
+       screens. */
+    --glib-blue: #0257fd; /* primary accent — actions, focus, progress */
+    --glib-grey: #101214; /* primary base — text, dark surfaces */
+    --blue-grey: #edf1f4; /* secondary — support surfaces, rails, chips */
+    --white: #ffffff;
+
+    /* derived, permitted */
+    --blue-700: #0246ce; /* pressed */
+    --blue-100: #e3edff; /* selected row, info wash */
+    --grey-600: #5a6169; /* secondary text */
+    --grey-300: #c7cdd4; /* hairlines */
+    --ok: #0f7b4f;
+    --warn: #b26a00;
+    --stop: #c0271a;
+
+    /* Type stacks. The self-hosted faces are OPTIONAL — BUILD_FONTS=none
+       never loads them and the system stack takes over with no layout
+       breakage (§3.3). */
+    --font-display: 'Inter Glib', system-ui, -apple-system, BlinkMacSystemFont,
+      'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --font-body: 'Source Sans Glib', system-ui, -apple-system,
+      BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  html {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--app-bg);
+    @apply text-slate-700 text-14;
+  }
+
+  /* Consistent focus ring across all interactive elements */
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px theme('colors.brand.500');
+    border-radius: 6px;
+  }
+
+  /* Tabular numerals for financial data / IDs */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---- Glib.money surface (§3) ----------------------------------------------
+   Scoped under `.glib` so the back-office console at /console keeps its own
+   visual language untouched. The journeys never restyle the dashboard. */
+@layer components {
+  .glib {
+    font-family: var(--font-body);
+    color: var(--glib-grey);
+    background: var(--white);
+  }
+  /* Paragraphs flush left, ragged right, never centred (§3.2). */
+  .glib p,
+  .glib li {
+    text-align: left;
+  }
+  .glib h1,
+  .glib h2,
+  .glib h3,
+  .glib .display,
+  .glib button,
+  .glib .num {
+    font-family: var(--font-display);
+  }
+  .glib .num,
+  .glib .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Visible keyboard focus on every interactive element (§21). */
+  .glib :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--glib-blue);
+    outline-offset: 2px;
+    box-shadow: none;
+    border-radius: 8px;
+  }
+}
+
+@layer utilities {
+  /* §11.3 — the moment that sells the product: N tasks disappear at once when a
+     consent is granted. Respects prefers-reduced-motion via the global block
+     further down. */
+  .task-exit {
+    animation: task-exit 420ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  }
+  @keyframes task-exit {
+    0% {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      max-height: 220px;
+    }
+    55% {
+      opacity: 0;
+      transform: translateX(28px) scale(0.97);
+      max-height: 220px;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(28px) scale(0.97);
+      max-height: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-width: 0;
+    }
+  }
+  .task-enter {
+    animation: task-enter 260ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  @keyframes task-enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* The logo's diamond clip — the only other permitted use of the signature
+     geometry (§3.4): RM avatars and customer photo thumbnails. */
+  .glib-diamond {
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Subtle, standard scrollbars — not reinvented, just refined */
+  .thin-scroll::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+  .thin-scroll::-webkit-scrollbar-thumb {
+    background: #cbd3e1;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  .thin-scroll::-webkit-scrollbar-thumb:hover {
+    background: #aab6ca;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  .thin-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Dark scrollbar for the navy rail */
+  .rail-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  .rail-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+  }
+}
+
+/* ---- Print / PDF (§v2 req 7) --------------------------------------------- */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  /* Chrome, sidebar, action bars and pagination controls never print. */
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body {
+    font-size: 10px;
+  }
+  main {
+    overflow: visible !important;
+  }
+  /* Repeat the header on every printed page and never split a row. */
+  thead {
+    display: table-header-group;
+  }
+  tr,
+  img {
+    break-inside: avoid;
+  }
+  * {
+    box-shadow: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

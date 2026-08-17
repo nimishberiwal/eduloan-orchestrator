@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output — regenerate with `npm run build` / scripts/build-standalone.mjs
+dist/
+*.tsbuildinfo
+
+# Local tooling caches
+.impeccable/
+
+# OS / editor
+.DS_Store
+*.local
+.vscode/
+.idea/

@@ -1,0 +1,37 @@
+/* ===========================================================================
+   Glib.money type — self-hosted, latin subset, variable weight (§3.3).
+
+   The dashboard deliberately used `system-ui` so the 0.54 MB standalone HTML has
+   NO external dependency. Web fonts break that, so:
+     1. only the latin subset ships, and only as the two variable faces that
+        cover the four weights actually used (Inter 600/700, Source Sans 400/600)
+     2. `font-display: swap` with the system stack declared as the fallback, so a
+        font failure degrades rather than blanks
+     3. this file is imported CONDITIONALLY from main.tsx behind BUILD_FONTS —
+        `none` never loads it and must render without layout breakage.
+
+   Two variable files (77 kB raw) replace the four static faces the spec
+   budgeted at 180–240 kB; see DECISIONS.md.
+   =========================================================================== */
+
+@font-face {
+  font-family: 'Inter Glib';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin-var.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Source Sans Glib';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('./assets/fonts/source-sans-3-latin-var.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
