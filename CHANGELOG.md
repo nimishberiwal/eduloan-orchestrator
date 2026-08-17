@@ -23,6 +23,49 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.0.2] — 2026-08-18
+
+Fixes the latent `CaptureHost` defect logged as known/open in 2.0.1. One file.
+
+### Fixed
+
+- **A capture result could outlive the document it belonged to.** `CaptureHost`
+  held the result as a bare `CaptureResult | null`. React Router reuses the
+  component across a `:docId` change — same route pattern, different param, no
+  remount — so moving directly from one capture screen to another rendered CJ-18
+  for the **previous** document: a passport's reading under the I-20's heading,
+  with that document's Confirm button live beneath it. Confirming there would
+  have written one document's extraction against another's slot.
+
+  The result is now held together with the document it describes, and a result
+  belonging to a different document is simply not a result for this screen. An
+  effect resetting on `docId` would also have worked, but it clears one render
+  too late — the wrong screen paints first. This makes the stale case
+  unrepresentable rather than something to remember to clear.
+
+  Pre-existing, from V1. Not reachable through the normal flow, which leaves
+  CJ-18 via the task list; found by a scripted walk that moved between capture
+  routes directly. It also affects the co-applicant and collateral portals,
+  which mount the same host.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| The reproduction from 2.0.1 | Passport → confirm, then jump to the I-20 route → **the I-20's capture screen**, file input present |
+| Retake | Returns to the capture screen |
+| Confirm | Navigates to the task list |
+| `tsc --noEmit` · `npm run build` · standalone | clean · clean · 0.92 MB |
+| `scripts/scan-vocabulary.mjs` | `leaks: []` |
+
+### Known / open
+
+- The acceptance re-walk carried forward from 2.0.1 is still risk-targeted, not
+  exhaustive. Handoff tokens, expiry, the role matrix and analytics have not
+  been re-walked since v1.1.0.
+
+---
+
 ## [2.0.1] — 2026-08-18
 
 Closes the four **Known / open** items carried by 2.0.0. No new features.

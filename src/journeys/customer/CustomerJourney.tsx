@@ -151,7 +151,20 @@ export function CaptureHost({
 }) {
   const { docId } = useParams()
   const nav = useNavigate()
-  const [result, setResult] = useState<CaptureResult | null>(null)
+  // The capture is held WITH the document it belongs to.
+  //
+  // React Router reuses this component across a `:docId` change — same route
+  // pattern, different param, no remount — so a plain `CaptureResult | null`
+  // survived into the next document's screen and rendered CJ-18 for the
+  // PREVIOUS document: a passport's reading shown under the I-20's heading,
+  // with that document's Confirm button live beneath it.
+  //
+  // Pairing the two makes the stale case unrepresentable rather than something
+  // to remember to clear. An effect that reset on `docId` would work, but it
+  // clears one render too late — the wrong screen paints first. A result for
+  // another document simply is not a result for this one.
+  const [held, setHeld] = useState<{ docId: string; capture: CaptureResult } | null>(null)
+  const result = held && held.docId === docId ? held.capture : null
   // These hosts are mounted by the portals too, so the rail follows the PARTY.
   const steps = partyRole === 'applicant' ? liveRail(app) : undefined
   const home = partyRole === 'applicant' ? '/apply' : root
@@ -168,7 +181,9 @@ export function CaptureHost({
           app={app}
           docId={docId!}
           onAccepted={(r, agents) => {
-            setResult(r)
+            // Keyed on the capture's OWN docId, not the route's — they agree,
+            // and the capture is the thing being described.
+            setHeld({ docId: r.docId, capture: r })
             emit(
               wasRejected ? 'DOCUMENT_REPLACED' : 'DOCUMENT_UPLOADED',
               { docId: r.docId, fileName: r.fileName, sizeKb: r.sizeKb },
@@ -208,7 +223,7 @@ export function CaptureHost({
           })
           nav(`${root}/tasks`)
         }}
-        onRetake={() => setResult(null)}
+        onRetake={() => setHeld(null)}
       />
     </AppShell>
   )
