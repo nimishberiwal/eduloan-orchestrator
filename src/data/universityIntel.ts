@@ -25,16 +25,43 @@
 //   3. Where a university genuinely yields little, `coverage` is 'thin' and
 //      `note` says why. Four universities are marked thin. That is the honest
 //      answer, not a gap to be padded.
-//   4. `university` MUST equal `UniversityRef.short` in US_UNIVERSITIES. This
-//      module is deliberately standalone — no import from lib/ — so the two are
-//      kept in step by the string values below, not by a compile-time link.
+//   4. For the 14 selectable universities, `university` equals
+//      `UniversityRef.short` in US_UNIVERSITIES. This module is deliberately
+//      standalone — no import from lib/ — so the two are kept in step by the
+//      string values below, not by a compile-time link.
+//
+// COVERAGE — TWO POPULATIONS
+// This corpus now holds two overlapping sets of universities:
+//
+//   (a) The 14 universities the pre-qualification screen can select, i.e.
+//       US_UNIVERSITIES in lib/eligibility.ts. Every one is covered.
+//   (b) The 39 US schools that appear in the Financial Times Global MBA
+//       Ranking 2026. Eight of those are already in set (a) — MIT, Harvard,
+//       UC Berkeley, NYU, CMU, USC, ASU and UT Dallas — so set (b) adds 31
+//       further universities.
+//
+// The 31 additions are NOT YET SELECTABLE. US_UNIVERSITIES has 14 entries and
+// lives in lib/eligibility.ts, which this workstream does not own. Until that
+// array is extended, `intelFor('Wharton')` etc. will return a dossier for a
+// university the pre-qual screen cannot offer. That is a deliberate, flagged
+// state, not an oversight — the consuming agent should treat a hit on a
+// non-selectable university as informational only.
+//
+// A NOTE ON THE FT LIST
+// The Financial Times publishes no "top 50 US colleges" ranking. Its US-facing
+// product is the Global MBA Ranking, and the 2026 edition contains 39 US
+// schools, not 50. Stanford GSB and Columbia Business School do not appear at
+// all — both facts are recorded as findings against those universities. Because
+// the ranking is MBA-only, every finding drawn from it is tagged ['MBA']; it
+// says nothing about the MS programmes that most applicants on this book take.
 //
 // RESEARCH WINDOW
-// Sources span 2025-03-19 to 2026-08-13. The corpus was assembled 2026-08-17.
-// The dominant themes across all 14: a sustained contraction in US federal
-// research funding, the endowment excise tax rise, and a tightening student-visa
-// regime — all three of which bear directly on programme continuity and on the
-// borrower's post-study earning window.
+// Sources span 2025-03-07 to 2026-08-13. The corpus was assembled 2026-08-17.
+// The dominant themes: a sustained contraction in US federal research funding,
+// the endowment excise tax rise, the elimination of the federal Grad PLUS loan
+// from 1 July 2026, and a tightening student-visa regime — all of which bear on
+// programme continuity, on how much of the cost a borrower must privately fund,
+// and on the post-study earning window.
 // ============================================================================
 
 export type IntelCategory =
@@ -78,6 +105,17 @@ export interface UniversityIntel {
   /** Required when coverage is 'thin'. Says what was looked for and not found. */
   note?: string
   findings: IntelFinding[]
+}
+
+// ---- Shared source ----------------------------------------------------------
+// The FT Global MBA Ranking 2026 table, published 2026-02-15. FT's own page is
+// paywalled; the table below was read in full from the copy IIM Ahmedabad
+// publishes, and the top of the table was cross-checked against Clear Admit's
+// 2026-02-15 write-up. Cited once here rather than retyped 41 times.
+const FT_MBA_2026: IntelSource = {
+  publisher: 'Financial Times — Global MBA Ranking 2026',
+  url: 'https://www.iima.ac.in/sites/default/files/2026-02/FT%20Global%20MBA%20Ranking%202026.pdf',
+  date: '2026-02-15',
 }
 
 // ---- Massachusetts Institute of Technology ---------------------------------
@@ -129,6 +167,17 @@ const MIT: UniversityIntel = {
         url: 'https://orgchart.mit.edu/letters/major-tax-impact-mit-and-its-mission',
         date: '2025-07-10',
       },
+    },
+    {
+      id: 'mit-ranking-ft-mba-2026-first',
+      university: 'MIT',
+      category: 'ranking',
+      headline: 'Sloan took first place in the world for the MBA',
+      detail:
+        'MIT Sloan rose five places to top the Financial Times Global MBA Ranking 2026, displacing Wharton. It was one of only three US schools in that ranking\'s top ten, in an edition where US representation fell to 39 of the 100 places.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
     },
     {
       id: 'mit-ranking-qs-2027-first',
@@ -196,6 +245,17 @@ const STANFORD: UniversityIntel = {
         url: 'https://www.technologyreview.com/2026/08/10/1141597/ai-professors-are-negotiating-the-new-realities-of-academic-research',
         date: '2026-08-10',
       },
+    },
+    {
+      id: 'stanford-ranking-ft-mba-2026-absent',
+      university: 'Stanford',
+      category: 'ranking',
+      headline: 'Stanford Graduate School of Business does not appear in the FT MBA ranking',
+      detail:
+        'Stanford GSB was absent from the Financial Times Global MBA Ranking 2026 for the second consecutive year, having decided not to participate. Its absence is a choice by the school, not a fall in standing, and no FT position can be quoted for a Stanford MBA applicant.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
     },
     {
       id: 'stanford-ranking-qs-2027-second',
@@ -278,6 +338,17 @@ const HARVARD: UniversityIntel = {
       },
     },
     {
+      id: 'harvard-ranking-ft-mba-2026-tenth',
+      university: 'Harvard',
+      category: 'ranking',
+      headline: 'Harvard Business School fell to its lowest MBA ranking on record',
+      detail:
+        'HBS placed tenth in the Financial Times Global MBA Ranking 2026, its weakest position since the ranking began in 1999. The school remains inside the top ten, but the direction of travel is down.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
       id: 'harvard-ranking-qs-2027-fifth',
       university: 'Harvard',
       category: 'ranking',
@@ -343,6 +414,17 @@ const CMU: UniversityIntel = {
         url: 'https://the-tartan.org/2026/03/30/president-jahanian-delivers-state-of-university-address/',
         date: '2026-03-30',
       },
+    },
+    {
+      id: 'cmu-ranking-ft-mba-2026-41st',
+      university: 'CMU',
+      category: 'ranking',
+      headline: 'Tepper placed joint 41st in the world for the MBA',
+      detail:
+        'Carnegie Mellon Tepper ranked joint 41st in the Financial Times Global MBA Ranking 2026, up from 49th the previous year but still below its 33rd place two years earlier.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
     },
     {
       id: 'cmu-policy-congressional-stem-enrolment-inquiry-2025',
@@ -412,6 +494,17 @@ const COLUMBIA: UniversityIntel = {
       },
     },
     {
+      id: 'columbia-ranking-ft-mba-2026-absent',
+      university: 'Columbia',
+      category: 'ranking',
+      headline: 'Columbia Business School dropped out of the FT MBA ranking entirely',
+      detail:
+        'Having finished inside the top five the previous year, Columbia Business School did not appear in the Financial Times Global MBA Ranking 2026 at all, after failing to meet the threshold for alumni survey responses. This is a data-submission failure rather than a judgement on the programme, but no FT position exists for the current year.',
+      level: 'attention',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
       id: 'columbia-leadership-presidential-transition-2026',
       university: 'Columbia',
       category: 'leadership',
@@ -464,6 +557,17 @@ const BERKELEY: UniversityIntel = {
         url: 'https://eecs.berkeley.edu/news/changing-of-the-guard-welcoming-ana-arias-as-eecs-department-chair/',
         date: '2026-07-02',
       },
+    },
+    {
+      id: 'ucberkeley-ranking-ft-mba-2026-ninth',
+      university: 'UC Berkeley',
+      category: 'ranking',
+      headline: 'Haas rose into the world top ten for the MBA',
+      detail:
+        'Berkeley Haas climbed to ninth in the Financial Times Global MBA Ranking 2026, up from fifteenth, one of the few US schools to gain ground in an edition where American representation shrank.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
     },
     {
       id: 'ucberkeley-funding-title-vi-cuts-2025',
@@ -639,6 +743,17 @@ const ASU: UniversityIntel = {
       },
     },
     {
+      id: 'asu-ranking-ft-mba-2026-54th',
+      university: 'ASU',
+      category: 'ranking',
+      headline: 'W. P. Carey placed 54th in the world for the MBA',
+      detail:
+        'Arizona State\'s W. P. Carey School ranked 54th in the Financial Times Global MBA Ranking 2026, up from 59th the previous year. It is the highest-placed of the large public universities on this book aside from the Californian and Texan flagships.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
       id: 'asu-funding-research-expenditure-record-2025',
       university: 'ASU',
       category: 'funding',
@@ -692,6 +807,17 @@ const UT_DALLAS: UniversityIntel = {
       },
     },
     {
+      id: 'utdallas-ranking-ft-mba-2026-68th',
+      university: 'UT Dallas',
+      category: 'ranking',
+      headline: 'The Jindal School placed 68th in the world for the MBA',
+      detail:
+        'UT Dallas\'s Naveen Jindal School ranked 68th in the Financial Times Global MBA Ranking 2026, down from 54th the previous year — the steepest single-year fall of any US school in the table. It is the lowest-ranked US entry among the universities currently selectable on this book.',
+      level: 'attention',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
       id: 'utdallas-leadership-president-appointed-2025',
       university: 'UT Dallas',
       category: 'leadership',
@@ -742,6 +868,17 @@ const NYU: UniversityIntel = {
         url: 'https://nyunews.com/news/2026/03/13/university-senate-abu-dhabi/',
         date: '2026-03-13',
       },
+    },
+    {
+      id: 'nyu-ranking-ft-mba-2026-23rd',
+      university: 'NYU',
+      category: 'ranking',
+      headline: 'Stern placed 23rd in the world for the MBA',
+      detail:
+        'NYU Stern ranked 23rd in the Financial Times Global MBA Ranking 2026, up from 31st the previous year — one of the stronger US movements in an edition where most American schools slipped.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
     },
     {
       id: 'nyu-adverse-federal-agreement-programme-change-2026',
@@ -808,6 +945,17 @@ const USC: UniversityIntel = {
         url: 'https://laist.com/brief/news/education/usc-general-counsel-beong-soo-kim-university-president',
         date: '2026-02-04',
       },
+    },
+    {
+      id: 'usc-ranking-ft-mba-2026-46th',
+      university: 'USC',
+      category: 'ranking',
+      headline: 'Marshall placed 46th in the world for the MBA',
+      detail:
+        'USC Marshall ranked 46th in the Financial Times Global MBA Ranking 2026, up from 50th the previous year though below its 33rd place two years earlier. The improvement sits against the university\'s wider budget contraction.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
     },
     {
       id: 'usc-policy-declined-federal-compact-2025',
@@ -937,8 +1085,1304 @@ const CLARK: UniversityIntel = {
   ],
 }
 
+// ============================================================================
+// FT GLOBAL MBA RANKING 2026 — THE 31 UNIVERSITIES NOT YET SELECTABLE
+// Ordered by FT rank. None of these appear in US_UNIVERSITIES yet; see the
+// "COVERAGE — TWO POPULATIONS" note at the top of this file.
+// ============================================================================
+
+const PENN: UniversityIntel = {
+  university: 'Penn',
+  name: 'University of Pennsylvania',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'penn-ranking-ft-mba-2026-third',
+      university: 'Penn',
+      category: 'ranking',
+      headline: 'Wharton lost the world number-one MBA place it had held for two years',
+      detail:
+        'Wharton fell to third in the Financial Times Global MBA Ranking 2026 after two consecutive years at the top. It remains the highest-placed US school after MIT Sloan.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'penn-policy-grad-plus-withdrawal-2026',
+      university: 'Penn',
+      category: 'policy',
+      headline: 'Federal Grad PLUS loan ends and graduate borrowing is capped at $100,000',
+      detail:
+        'Penn identified the elimination of the Grad PLUS loan programme and new lifetime federal borrowing caps — $100,000 for graduate students, $200,000 for professional students — as a direct pressure on its roughly 14,000 graduate and professional students. For an overseas applicant this matters indirectly but sharply: it removes the federal option for domestic classmates and shifts the whole cohort towards private lending.',
+      level: 'attention',
+      programmeTags: ['MBA', 'MS Finance', 'MS Business Analytics'],
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/penn-budget-measures-endowment-tax-federal-policy/811047/',
+        date: '2026-01-30',
+      },
+    },
+    {
+      id: 'penn-funding-expenditure-reduction-2026',
+      university: 'Penn',
+      category: 'funding',
+      headline: 'Schools told to cut spending 4% as the endowment tax bill climbs',
+      detail:
+        'Penn directed every school and centre to reduce certain expenditures by 4% for the coming financial year. It projects an endowment tax bill of $58.5 million for the 2026 financial year, rising to $84.6 million by 2030, having moved from the 1.4% band into the 4% band.',
+      level: 'attention',
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/penn-budget-measures-endowment-tax-federal-policy/811047/',
+        date: '2026-01-30',
+      },
+    },
+    {
+      id: 'penn-adverse-federal-funding-withheld-2025',
+      university: 'Penn',
+      category: 'adverse',
+      headline: '$175 million in federal funding was withheld over an athletics dispute',
+      detail:
+        'Penn learned through news reports that $175 million in federal funding had been withheld, in what was presented as a response to a transgender athlete competing three years earlier. The funding was later partly restored through negotiation.',
+      level: 'info',
+      source: {
+        publisher: 'Inside Higher Ed',
+        url: 'https://www.insidehighered.com/news/quick-takes/2025/03/26/penn-pledges-address-175m-federal-funding-cut',
+        date: '2025-03-26',
+      },
+    },
+  ],
+}
+
+const NORTHWESTERN: UniversityIntel = {
+  university: 'Northwestern',
+  name: 'Northwestern University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'northwestern-ranking-ft-mba-2026-11th',
+      university: 'Northwestern',
+      category: 'ranking',
+      headline: 'Kellogg placed 11th in the world for the MBA',
+      detail:
+        'Northwestern Kellogg ranked 11th in the Financial Times Global MBA Ranking 2026, just outside the top ten and down from tenth the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'northwestern-funding-jobs-cut-2025',
+      university: 'Northwestern',
+      category: 'funding',
+      headline: '425 posts cut after $790 million in federal funding was frozen',
+      detail:
+        'Northwestern eliminated about 425 staff positions, roughly 5% of its staffing budget, after some $790 million in federal funds were frozen and around 150 stop-work orders and grant terminations arrived from federal agencies. Leaders called it among the most difficult periods in the institution\'s 174-year history.',
+      level: 'attention',
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/northwestern-university-425-jobs-cut-layoffs-funding-freeze-investigations/756356/',
+        date: '2025-07-30',
+      },
+    },
+    {
+      id: 'northwestern-adverse-federal-settlement-2025',
+      university: 'Northwestern',
+      category: 'adverse',
+      headline: 'Paid $75 million to settle federal claims and restore funding',
+      detail:
+        'Northwestern agreed to pay the federal government $75 million through 2028 in exchange for closing all pending investigations and restoring eligibility for federal grants, contracts and awards. Frozen funding was expected back within 30 days.',
+      level: 'info',
+      source: {
+        publisher: 'NPR',
+        url: 'https://www.npr.org/2025/11/29/nx-s1-5624964/northwestern-trump-funding-settlement',
+        date: '2025-11-29',
+      },
+    },
+    {
+      id: 'northwestern-leadership-new-president-2026',
+      university: 'Northwestern',
+      category: 'leadership',
+      headline: 'Recruited Purdue\'s president as its eighteenth leader',
+      detail:
+        'Mung Chiang, president of Purdue, was named Northwestern\'s eighteenth president with effect from 1 July 2026. He succeeds Michael Schill, who stepped down in September 2025 after a turbulent period. The same move leaves Purdue under an interim president.',
+      level: 'info',
+      source: {
+        publisher: 'The Daily Northwestern',
+        url: 'https://dailynorthwestern.com/2026/05/18/top-stories/purdue-president-mung-chiang-named-18th-president-of-northwestern/',
+        date: '2026-05-18',
+      },
+    },
+  ],
+}
+
+const CORNELL: UniversityIntel = {
+  university: 'Cornell',
+  name: 'Cornell University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'cornell-ranking-ft-mba-2026-15th',
+      university: 'Cornell',
+      category: 'ranking',
+      headline: 'Johnson slipped from ninth to fifteenth in the world',
+      detail:
+        'Cornell Johnson fell six places to fifteenth in the Financial Times Global MBA Ranking 2026, one of the larger declines among established US programmes.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'cornell-funding-federal-settlement-2025',
+      university: 'Cornell',
+      category: 'funding',
+      headline: 'Paid $60 million to restore more than $250 million of federal funding',
+      detail:
+        'Cornell agreed to pay $30 million to the federal government and invest a further $30 million in agricultural research over three years, restoring over $250 million in paused and previously ineligible grants and closing federal civil rights investigations. It was the fourth Ivy League institution to settle.',
+      level: 'info',
+      source: {
+        publisher: 'The Cornell Daily Sun',
+        url: 'https://www.cornellsun.com/article/2025/11/cornell-reaches-settlement-with-trump-administration-to-restore-federal-funding',
+        date: '2025-11-07',
+      },
+    },
+    {
+      id: 'cornell-policy-admissions-data-reporting-2025',
+      university: 'Cornell',
+      category: 'policy',
+      headline: 'Must report anonymised admissions data to the federal government until 2028',
+      detail:
+        'Under the settlement Cornell provides quarterly anonymised undergraduate admissions data — including race, grade average and test scores — for federal audit, with the agreement running to 31 December 2028. The agreement expressly denies the government authority over academic content or curricula.',
+      level: 'info',
+      source: {
+        publisher: 'The Cornell Daily Sun',
+        url: 'https://www.cornellsun.com/article/2025/11/cornell-reaches-settlement-with-trump-administration-to-restore-federal-funding',
+        date: '2025-11-07',
+      },
+    },
+    {
+      id: 'cornell-funding-continued-austerity-2025',
+      university: 'Cornell',
+      category: 'funding',
+      headline: 'Leadership warned further urgent cost action was needed',
+      detail:
+        'Cornell warned that more urgent action was required to contain costs, citing the federal research freeze alongside rising costs, staff expansion, extraordinary legal expenses and growth in financial aid. Around 180 staff were laid off across the year, with reductions continuing into 2026 even after the settlement.',
+      level: 'attention',
+      source: {
+        publisher: 'Forbes',
+        url: 'https://www.forbes.com/sites/michaeltnietzel/2025/08/23/cornell-university-warns-moreurgent-action-needed-to-rein-in-costs/',
+        date: '2025-08-23',
+      },
+    },
+  ],
+}
+
+const DUKE: UniversityIntel = {
+  university: 'Duke',
+  name: 'Duke University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'duke-ranking-ft-mba-2026-16th',
+      university: 'Duke',
+      category: 'ranking',
+      headline: 'Fuqua placed 16th in the world for the MBA',
+      detail:
+        'Duke Fuqua ranked 16th in the Financial Times Global MBA Ranking 2026, down from 11th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'duke-funding-cost-programme-2025',
+      university: 'Duke',
+      category: 'funding',
+      headline: 'A $364 million cost-cutting programme, delivered largely through buyouts',
+      detail:
+        'Duke set out to remove $364 million from its cost base and had realised $299 million by the end of 2025 through buyouts and building closures, with about 599 employees accepting voluntary separation. The president said Duke would have to be smaller and employ fewer people.',
+      level: 'attention',
+      source: {
+        publisher: 'The Duke Chronicle',
+        url: 'https://dukechronicle.com/article/duke-university-cost-cutting-program-2025-strategic-realignment-federal-funding-vsip-20251228',
+        date: '2025-12-28',
+      },
+    },
+    {
+      id: 'duke-adverse-audit-disputes-cuts-2026',
+      university: 'Duke',
+      category: 'adverse',
+      headline: 'An independent audit found no financial justification for the cuts',
+      detail:
+        'An audit commissioned by Duke\'s AAUP chapter concluded the university was in very strong financial condition — over $14 billion in unrestricted reserves, assets above $32 billion, and no year-on-year decline in federal research funding — and that claims of budget holes were unsupported. The finding is contested but is on the public record alongside roughly 600 separations.',
+      level: 'attention',
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/dukes-budget-and-employee-cuts-called-into-question-by-audit/811164/',
+        date: '2026-02-02',
+      },
+    },
+  ],
+}
+
+const YALE: UniversityIntel = {
+  university: 'Yale',
+  name: 'Yale University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'yale-ranking-ft-mba-2026-17th',
+      university: 'Yale',
+      category: 'ranking',
+      headline: 'Yale School of Management placed joint 17th in the world',
+      detail:
+        'Yale School of Management ranked joint 17th in the Financial Times Global MBA Ranking 2026, up from 24th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'yale-funding-endowment-tax-300m-2025',
+      university: 'Yale',
+      category: 'funding',
+      headline: 'Braced for $300 million a year in endowment tax, with layoffs expected',
+      detail:
+        'Yale expects the endowment tax rise from 1.4% to 8% to cost roughly $300 million annually from 2026, and told staff that layoffs may be necessary in units where other measures fall short, aiming to complete any reductions by the end of 2026.',
+      level: 'attention',
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/yale-university-expects-layoffs-endowment-tax/807107/',
+        date: '2025-12-05',
+      },
+    },
+    {
+      id: 'yale-funding-austerity-measures-2025',
+      university: 'Yale',
+      category: 'funding',
+      headline: 'Hiring paused, building deferred and non-salary spending cut 5%',
+      detail:
+        'Yale paused hiring, deferred building projects, cut non-salary expenses by 5% and offered early retirement buyouts to administrative staff, citing both the endowment tax and cuts to federal research funding and student financial aid.',
+      level: 'attention',
+      source: {
+        publisher: 'The Connecticut Mirror',
+        url: 'https://ctmirror.org/2025/12/05/yale-endowment-tax-layoffs/',
+        date: '2025-12-05',
+      },
+    },
+  ],
+}
+
+const UVA: UniversityIntel = {
+  university: 'UVA',
+  name: 'University of Virginia',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'uva-ranking-ft-mba-2026-19th',
+      university: 'UVA',
+      category: 'ranking',
+      headline: 'Darden placed 19th in the world for the MBA',
+      detail:
+        'UVA Darden ranked 19th in the Financial Times Global MBA Ranking 2026, up one place from the previous year and holding its position better than most US schools in this edition.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'uva-leadership-president-resigned-2025',
+      university: 'UVA',
+      category: 'leadership',
+      headline: 'President resigned under federal pressure',
+      detail:
+        'President James Ryan resigned in June 2025 as the university sought to resolve a federal investigation into its diversity commitments, a day after reporting that the government had conditioned closing the investigation on his departure.',
+      level: 'attention',
+      source: {
+        publisher: 'Inside Higher Ed',
+        url: 'https://www.insidehighered.com/news/government/politics-elections/2025/06/27/university-virginia-president-resigns-after-trumps',
+        date: '2025-06-27',
+      },
+    },
+    {
+      id: 'uva-policy-federal-agreement-no-payment-2025',
+      university: 'UVA',
+      category: 'policy',
+      headline: 'Settled federal investigations without paying anything',
+      detail:
+        'UVA reached an agreement pausing several federal investigations with no financial settlement and no external monitor, unlike the Columbia and Brown deals. The president must personally certify compliance each quarter.',
+      level: 'info',
+      source: {
+        publisher: 'CNN',
+        url: 'https://www.cnn.com/2025/10/22/politics/uva-trump-administration-settlement',
+        date: '2025-10-22',
+      },
+    },
+  ],
+}
+
+const CHICAGO: UniversityIntel = {
+  university: 'Chicago',
+  name: 'University of Chicago',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'chicago-ranking-ft-mba-2026-20th',
+      university: 'Chicago',
+      category: 'ranking',
+      headline: 'Booth fell from tenth to twentieth in two years',
+      detail:
+        'Chicago Booth ranked 20th in the Financial Times Global MBA Ranking 2026, down from 17th the previous year and from 10th two years earlier — one of the steeper sustained declines among top US programmes.',
+      level: 'attention',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'chicago-funding-100m-cuts-2025',
+      university: 'Chicago',
+      category: 'funding',
+      headline: '$100 million of cuts against a large recurring operating deficit',
+      detail:
+        'Chicago moved to shed $100 million in costs and eliminate 100 to 150 staff posts, after operating deficits of $201.7 million and $193.7 million in successive years. The president said annual income still falls short of expenses and that the position cannot continue.',
+      level: 'attention',
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/university-chicago-100-million-job-cuts/759051/',
+        date: '2025-09-02',
+      },
+    },
+    {
+      id: 'chicago-policy-phd-intake-paused-2025',
+      university: 'Chicago',
+      category: 'policy',
+      headline: 'Doctoral admissions paused in 19 programmes for 2026-27',
+      detail:
+        'Chicago paused PhD enrolment across 19 programmes for the 2026-27 year, almost all in the humanities and liberal arts, alongside scaled-back capital projects and a review of academic centres. Taught masters and MBA intakes were not part of the pause.',
+      level: 'info',
+      source: {
+        publisher: 'Higher Ed Dive',
+        url: 'https://www.highereddive.com/news/university-chicago-100-million-job-cuts/759051/',
+        date: '2025-09-02',
+      },
+    },
+  ],
+}
+
+const DARTMOUTH: UniversityIntel = {
+  university: 'Dartmouth',
+  name: 'Dartmouth College',
+  coverage: 'thin',
+  note:
+    'Two datable findings. Dartmouth moved into the 4% endowment tax band and its president has spoken publicly against the rise, but that reporting and the student paper\'s coverage carry no day-level dates that could be verified, so the tax exposure is not recorded as a finding. No leadership change, faculty move or adverse coverage was found. Dartmouth appears to be under less acute federal-funding pressure than its peers, but this corpus cannot evidence that either way.',
+  findings: [
+    {
+      id: 'dartmouth-ranking-ft-mba-2026-26th',
+      university: 'Dartmouth',
+      category: 'ranking',
+      headline: 'Tuck fell six places to 26th in the world',
+      detail:
+        'Dartmouth Tuck ranked 26th in the Financial Times Global MBA Ranking 2026, down from 20th the previous year and 12th two years earlier.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'dartmouth-funding-fy2026-budget-2025',
+      university: 'Dartmouth',
+      category: 'funding',
+      headline: 'Trustees approved a $1.6 billion budget with financial aid increased',
+      detail:
+        'Dartmouth\'s trustees approved a $1.6 billion operating budget for the 2026 financial year, including $312 million for financial aid — a $15 million increase — with the endowment contributing $470 million. It is one of the few institutions in this corpus increasing rather than trimming aid.',
+      level: 'info',
+      source: {
+        publisher: 'Dartmouth',
+        url: 'https://home.dartmouth.edu/news/2025/06/board-trustees-meet-june-2025',
+        date: '2025-06-20',
+      },
+    },
+  ],
+}
+
+const UCLA: UniversityIntel = {
+  university: 'UCLA',
+  name: 'University of California, Los Angeles',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'ucla-ranking-ft-mba-2026-32nd',
+      university: 'UCLA',
+      category: 'ranking',
+      headline: 'Anderson dropped sharply to 32nd in the world',
+      detail:
+        'UCLA Anderson ranked 32nd in the Financial Times Global MBA Ranking 2026, down from 19th the previous year — among the sharpest single-year falls of any established US programme.',
+      level: 'attention',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'ucla-adverse-billion-dollar-settlement-demand-2025',
+      university: 'UCLA',
+      category: 'adverse',
+      headline: 'Federal government demanded $1 billion to unfreeze research grants',
+      detail:
+        'After $584 million of research funding was frozen, the administration demanded UCLA pay $1 billion over three years plus $172 million into a claims fund in exchange for restoration. It was among the largest financial demands ever made of a university.',
+      level: 'attention',
+      source: {
+        publisher: 'Daily Bruin',
+        url: 'https://dailybruin.com/2025/08/08/proposed-ucla-settlement-from-federal-government-seeks-1-billion-policy-changes',
+        date: '2025-08-08',
+      },
+    },
+    {
+      id: 'ucla-funding-settlement-appeal-dropped-2026',
+      university: 'UCLA',
+      category: 'funding',
+      headline: 'The settlement demand was blocked and the appeal abandoned',
+      detail:
+        'A federal judge restored the great majority of UCLA\'s frozen grants, and in February 2026 the administration dropped its appeal against the order blocking the $1.2 billion settlement demand. The immediate threat to UCLA\'s research base has receded.',
+      level: 'info',
+      source: {
+        publisher: 'Daily Bruin',
+        url: 'https://dailybruin.com/2026/02/13/trump-administration-drops-appeal-of-order-blocking-1-2-billion-ucla-settlement',
+        date: '2026-02-13',
+      },
+    },
+  ],
+}
+
+const MICHIGAN: UniversityIntel = {
+  university: 'Michigan',
+  name: 'University of Michigan',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'michigan-ranking-ft-mba-2026-34th',
+      university: 'Michigan',
+      category: 'ranking',
+      headline: 'Ross placed joint 34th in the world for the MBA',
+      detail:
+        'Michigan Ross ranked joint 34th in the Financial Times Global MBA Ranking 2026, up from 29th — its first ranked appearance in three years.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'michigan-funding-bridge-support-2026',
+      university: 'Michigan',
+      category: 'funding',
+      headline: 'University stepped in to part-fund research hit by federal cuts',
+      detail:
+        'Michigan began partly funding faculty research projects affected by federal cuts. Its research expenditure reached a record $2.04 billion in 2024, of which $1.17 billion was federal, and a proposed 10% cap on indirect-cost reimbursement for NIH grants would remove around $92 million.',
+      level: 'attention',
+      source: {
+        publisher: 'The Detroit News',
+        url: 'https://www.detroitnews.com/story/news/local/michigan/2026/01/26/university-michigan-fund-faculty-research-impacted-federal-cuts/88359543007/',
+        date: '2026-01-26',
+      },
+    },
+    {
+      id: 'michigan-leadership-presidency-vacancy-2026',
+      university: 'Michigan',
+      category: 'leadership',
+      headline: 'A third year without a settled president',
+      detail:
+        'Santa Ono left the presidency in May 2025 after under three years. The regents appointed a successor in January 2026, but that appointment did not proceed after the appointee withdrew on health grounds, leaving the interim president in place and the search reopened.',
+      level: 'attention',
+      source: {
+        publisher: 'The Detroit News',
+        url: 'https://eu.detroitnews.com/story/news/local/michigan/2026/04/16/university-of-michigan-presidency-vacancy-crisis-kent-syverud-brain-cancer/89625456007/',
+        date: '2026-04-16',
+      },
+    },
+  ],
+}
+
+const WASHU: UniversityIntel = {
+  university: 'WashU',
+  name: 'Washington University in St. Louis',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'washu-ranking-ft-mba-2026-37th',
+      university: 'WashU',
+      category: 'ranking',
+      headline: 'Olin placed 37th in the world for the MBA',
+      detail:
+        'Washington University\'s Olin School ranked 37th in the Financial Times Global MBA Ranking 2026, up from 42nd the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'washu-funding-job-cuts-2025',
+      university: 'WashU',
+      category: 'funding',
+      headline: '316 posts cut and 198 vacancies closed for $52 million of savings',
+      detail:
+        'The chancellor announced the elimination of 316 staff positions and closure of 198 vacant roles, saving $52 million a year, citing federal research cuts. A new tax on the $12 billion endowment adds a further $37 million to the annual budget, and merit raises were skipped for the year.',
+      level: 'attention',
+      source: {
+        publisher: 'St. Louis Public Radio',
+        url: 'https://www.stlpr.org/education/2025-10-01/washington-university-cuts-316-jobs-eliminates-nearly-200-vacant-positions',
+        date: '2025-10-01',
+      },
+    },
+    {
+      id: 'washu-funding-deficit-smaller-than-feared-2025',
+      university: 'WashU',
+      category: 'funding',
+      headline: 'Projected deficit came in far smaller than expected',
+      detail:
+        'Leadership projected a $7.4 million deficit for the 2026 financial year, described as smaller than anticipated. Capital projects on the Danforth campus, including a new Arts and Sciences building, were cancelled or postponed.',
+      level: 'info',
+      source: {
+        publisher: 'Student Life',
+        url: 'https://www.studlife.com/news/2025/10/07/washu-leadership-shares-updates-on-university-budget-projects-a-smaller-than-anticipated-7-4-million-deficit-in-fiscal-year-2026',
+        date: '2025-10-07',
+      },
+    },
+  ],
+}
+
+const RICE: UniversityIntel = {
+  university: 'Rice',
+  name: 'Rice University',
+  coverage: 'thin',
+  note:
+    'Two datable findings. Rice is expanding — a 30% undergraduate enrolment increase to 2028 and faculty growth of 25-30% — while reporting federal funding down 26% on the year, but that reporting sits on undated institutional pages and a broadcast piece with no verifiable date, so neither figure is recorded as a finding. No leadership change or adverse coverage was found.',
+  findings: [
+    {
+      id: 'rice-ranking-ft-mba-2026-38th',
+      university: 'Rice',
+      category: 'ranking',
+      headline: 'Jones placed 38th in the world for the MBA',
+      detail:
+        'Rice\'s Jones Graduate School ranked 38th in the Financial Times Global MBA Ranking 2026, up from 39th and broadly holding position.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'rice-policy-financial-aid-expansion-2026',
+      university: 'Rice',
+      category: 'policy',
+      headline: 'Free tuition extended to families earning up to $200,000',
+      detail:
+        'Rice expanded its financial aid programme from autumn 2027 to cover full tuition for undergraduates from families earning up to $200,000, with tuition, fees, room and board covered below $100,000. The scheme is undergraduate and does not reach the graduate programmes most applicants on this book take.',
+      level: 'info',
+      source: {
+        publisher: 'Forbes',
+        url: 'https://www.forbes.com/sites/michaeltnietzel/2026/08/04/rice-becomes-the-latest-university-to-expand-its-free-tuition-offer/',
+        date: '2026-08-04',
+      },
+    },
+  ],
+}
+
+const UNC: UniversityIntel = {
+  university: 'UNC',
+  name: 'University of North Carolina at Chapel Hill',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'unc-ranking-ft-mba-2026-40th',
+      university: 'UNC',
+      category: 'ranking',
+      headline: 'Kenan-Flagler placed 40th in the world for the MBA',
+      detail:
+        'UNC Kenan-Flagler ranked 40th in the Financial Times Global MBA Ranking 2026, up from 51st the previous year — one of the larger US gains in this edition.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'unc-funding-budget-cuts-2026',
+      university: 'UNC',
+      category: 'funding',
+      headline: 'Trustees approved cuts of $70 million and above',
+      detail:
+        'UNC-Chapel Hill leadership identified around $70 million of operational savings, against a trustee-approved plan of $86.5 million, citing federal and state funding pressure. The university receives about $1 billion a year in federal research funds, tenth most in the country, and received roughly 100 fewer health research grants than the prior year.',
+      level: 'attention',
+      source: {
+        publisher: 'WUNC',
+        url: 'https://www.wunc.org/education/2026-03-26/unc-chapel-hill-trustees-budget-cut-financial-pressures',
+        date: '2026-03-26',
+      },
+    },
+    {
+      id: 'unc-policy-programme-closures-2026',
+      university: 'UNC',
+      category: 'policy',
+      headline: 'Area studies centres closed and several degree programmes eliminated',
+      detail:
+        'Six area studies centres were advised to close after losing much of their federal funding, and the board approved eliminating programmes including drama, religious studies and physics. Applicants should confirm a named course is still running for their intake.',
+      level: 'attention',
+      source: {
+        publisher: 'The Daily Tar Heel',
+        url: 'https://dailytarheel.com/article/university-chancellor-lee-roberts-qanda-jan-2026-20260112',
+        date: '2026-01-12',
+      },
+    },
+  ],
+}
+
+const UT_AUSTIN: UniversityIntel = {
+  university: 'UT Austin',
+  name: 'University of Texas at Austin',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'utaustin-ranking-ft-mba-2026-41st',
+      university: 'UT Austin',
+      category: 'ranking',
+      headline: 'McCombs placed joint 41st in the world for the MBA',
+      detail:
+        'UT Austin McCombs ranked joint 41st in the Financial Times Global MBA Ranking 2026, down from 39th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'utaustin-funding-nsf-first-2026',
+      university: 'UT Austin',
+      category: 'funding',
+      headline: 'Ranked first in the United States for research funded by the National Science Foundation',
+      detail:
+        'UT Austin reported the top national position for NSF-funded research expenditure. Its president said federal funding to the university rose over the past year, which he described as a surprise to many — a materially different position from most institutions in this corpus.',
+      level: 'info',
+      source: {
+        publisher: 'UT Austin News',
+        url: 'https://news.utexas.edu/2026/01/08/ut-ranks-no-1-in-u-s-for-research-funded-by-national-science-foundation/',
+        date: '2026-01-08',
+      },
+    },
+    {
+      id: 'utaustin-policy-federal-compact-position-2026',
+      university: 'UT Austin',
+      category: 'policy',
+      headline: 'Neither signed nor rejected the federal funding compact',
+      detail:
+        'UT Austin was one of nine universities sent the proposed federal compact, which would have capped international undergraduate enrolment at 15%. The president said there was nothing presented to him to sign and treated it as a request for feedback rather than a decision.',
+      level: 'info',
+      source: {
+        publisher: 'The Daily Texan',
+        url: 'https://thedailytexan.com/2026/04/09/theres-nothing-for-me-to-sign-trump-administration-compact-meant-to-initiate-dialogue-davis-says/',
+        date: '2026-04-09',
+      },
+    },
+  ],
+}
+
+const GEORGIA_TECH: UniversityIntel = {
+  university: 'Georgia Tech',
+  name: 'Georgia Institute of Technology',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'georgiatech-ranking-ft-mba-2026-44th',
+      university: 'Georgia Tech',
+      category: 'ranking',
+      headline: 'Scheller placed 44th in the world for the MBA',
+      detail:
+        'Georgia Tech Scheller ranked 44th in the Financial Times Global MBA Ranking 2026, up from 58th the previous year — the largest single-year gain of any US school in the table.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'georgiatech-leadership-president-departing-2026',
+      university: 'Georgia Tech',
+      category: 'leadership',
+      headline: 'President leaving in November to lead a policy institute',
+      detail:
+        'Ángel Cabrera announced in June 2026 that he would leave Georgia Tech in November to become president and chief executive of the Aspen Institute. A successor had not been named at the time of the announcement.',
+      level: 'attention',
+      source: {
+        publisher: 'Georgia Tech News Center',
+        url: 'https://news.gatech.edu/news/2026/06/15/president-angel-cabrera-named-president-and-ceo-aspen-institute',
+        date: '2026-06-15',
+      },
+    },
+    {
+      id: 'georgiatech-funding-research-scale-2026',
+      university: 'Georgia Tech',
+      category: 'funding',
+      headline: 'Sponsored research awards above $1.4 billion a year',
+      detail:
+        'Annual sponsored research awards passed $1.4 billion, placing Georgia Tech first nationally in research expenditure among universities without a medical school and second nationally in federal research funding. Enrolment grew 55% to over 56,000 students.',
+      level: 'info',
+      programmeTags: ['MS Computer Science', 'MS Data Science', 'MS Electrical Engineering', 'MEng ECE'],
+      source: {
+        publisher: 'Georgia Tech News Center',
+        url: 'https://news.gatech.edu/news/2026/06/15/president-angel-cabrera-named-president-and-ceo-aspen-institute',
+        date: '2026-06-15',
+      },
+    },
+  ],
+}
+
+const UW: UniversityIntel = {
+  university: 'UW',
+  name: 'University of Washington',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'uw-ranking-ft-mba-2026-45th',
+      university: 'UW',
+      category: 'ranking',
+      headline: 'Foster fell eleven places to 45th in the world',
+      detail:
+        'University of Washington Foster ranked 45th in the Financial Times Global MBA Ranking 2026, down from 34th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'uw-funding-federal-budget-exposure-2026',
+      university: 'UW',
+      category: 'funding',
+      headline: 'Federal budget request proposed cutting the National Science Foundation by 55%',
+      detail:
+        'The university tracked a federal budget request that would reduce NSF funding from $8.8 billion to about $4 billion, a 55% cut, with an 86% reduction to STEM education programmes and further cuts to health and energy research. UW is among the most federally dependent research universities in the country.',
+      level: 'attention',
+      source: {
+        publisher: 'University of Washington Office of Federal Relations',
+        url: 'https://www.washington.edu/federalrelations/2026/04/03/more-details-on-administration-budget-request/',
+        date: '2026-04-03',
+      },
+    },
+    {
+      id: 'uw-funding-provost-budget-update-2026',
+      university: 'UW',
+      category: 'funding',
+      headline: 'Budget planning continued under combined state and federal pressure',
+      detail:
+        'The provost issued a budget update in April 2026 covering planning against both state and federal reductions. Leadership had earlier described the position as comparable to the 2008 recession.',
+      level: 'info',
+      source: {
+        publisher: 'University of Washington Office of the Provost',
+        url: 'https://www.washington.edu/provost/2026/04/15/updates-from-the-provost-april-15-2026/',
+        date: '2026-04-15',
+      },
+    },
+  ],
+}
+
+const GEORGETOWN: UniversityIntel = {
+  university: 'Georgetown',
+  name: 'Georgetown University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'georgetown-ranking-ft-mba-2026-49th',
+      university: 'Georgetown',
+      category: 'ranking',
+      headline: 'McDonough placed 49th in the world for the MBA',
+      detail:
+        'Georgetown McDonough ranked 49th in the Financial Times Global MBA Ranking 2026, down from 43rd the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'georgetown-policy-international-tuition-loss-2025',
+      university: 'Georgetown',
+      category: 'policy',
+      headline: '$17 million of international graduate tuition lost to visa and immigration policy',
+      detail:
+        'The interim president attributed a projected $17 million shortfall in international graduate tuition revenue to new visa and immigration policies and economic pressure on prospective students. Georgetown is one of the few universities to have quantified the international-enrolment effect this precisely.',
+      level: 'attention',
+      programmeTags: ['MBA', 'MS Finance', 'MS Business Analytics', 'MPH'],
+      source: {
+        publisher: 'Georgetown University, Office of the President',
+        url: 'https://president.georgetown.edu/messages/fy26-financial-status-nov-2025/',
+        date: '2025-11-24',
+      },
+    },
+    {
+      id: 'georgetown-funding-research-grant-loss-2025',
+      university: 'Georgetown',
+      category: 'funding',
+      headline: '$35 million a year lost in federal research funding',
+      detail:
+        'Georgetown projected an annual $35 million loss in federal research funding from federal actions, funding delays and the government shutdown, alongside utility costs up nearly 15% on budget and rising legal costs from federal inquiries. Targeted cuts and a hiring freeze allowed it to avoid large-scale layoffs.',
+      level: 'attention',
+      source: {
+        publisher: 'Georgetown University, Office of the President',
+        url: 'https://president.georgetown.edu/messages/fy26-financial-status-nov-2025/',
+        date: '2025-11-24',
+      },
+    },
+  ],
+}
+
+const VANDERBILT: UniversityIntel = {
+  university: 'Vanderbilt',
+  name: 'Vanderbilt University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'vanderbilt-ranking-ft-mba-2026-51st',
+      university: 'Vanderbilt',
+      category: 'ranking',
+      headline: 'Owen placed 51st in the world for the MBA',
+      detail:
+        'Vanderbilt Owen ranked 51st in the Financial Times Global MBA Ranking 2026, up from 52nd — effectively unchanged.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'vanderbilt-policy-federal-compact-feedback-2025',
+      university: 'Vanderbilt',
+      category: 'policy',
+      headline: 'Declined to reject the federal funding compact, offering feedback instead',
+      detail:
+        'Where seven of the nine universities approached rejected the proposed federal compact outright, Vanderbilt neither accepted nor rejected it, saying it had been asked for feedback as part of an ongoing dialogue. The compact would have capped international undergraduate enrolment at 15%.',
+      level: 'attention',
+      source: {
+        publisher: 'The Vanderbilt Hustler',
+        url: 'https://vanderbilthustler.com/2025/10/20/breaking-chancellor-daniel-diermeier-fails-to-reject-higher-education-compact-reaffirms-vanderbilts-values-and-openness-to-discussion/',
+        date: '2025-10-20',
+      },
+    },
+    {
+      id: 'vanderbilt-funding-national-expansion-2025',
+      university: 'Vanderbilt',
+      category: 'funding',
+      headline: 'Expanding to new campuses while peers contract',
+      detail:
+        'Vanderbilt is pursuing national expansion, including New York and West Palm Beach sites, at a time when most comparable institutions are cutting. It is one of the few universities in this corpus growing its physical footprint.',
+      level: 'info',
+      source: {
+        publisher: 'Inside Higher Ed',
+        url: 'https://www.insidehighered.com/news/business/physical-campuses/2025/09/25/vanderbilt-eyes-national-expansion',
+        date: '2025-09-25',
+      },
+    },
+  ],
+}
+
+const EMORY: UniversityIntel = {
+  university: 'Emory',
+  name: 'Emory University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'emory-ranking-ft-mba-2026-56th',
+      university: 'Emory',
+      category: 'ranking',
+      headline: 'Goizueta fell eleven places to 56th in the world',
+      detail:
+        'Emory Goizueta ranked 56th in the Financial Times Global MBA Ranking 2026, down from 45th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'emory-funding-hiring-freeze-2025',
+      university: 'Emory',
+      category: 'funding',
+      headline: 'Hiring frozen and raises halted against a $140 million annual exposure',
+      detail:
+        'Emory imposed an immediate staff hiring freeze, cut operating expenditure, halted compensation adjustments and restricted faculty hiring, estimating the federal changes would cost around $140 million a year. It received over $488 million in National Institutes of Health funding in 2024, by far the largest in Georgia.',
+      level: 'attention',
+      source: {
+        publisher: 'Georgia Public Broadcasting',
+        url: 'https://www.gpb.org/news/2025/03/06/emory-university-plans-curb-spending-staffing-fed-research-cuts-loom',
+        date: '2025-03-06',
+      },
+    },
+    {
+      id: 'emory-funding-measures-extending-2025',
+      university: 'Emory',
+      category: 'funding',
+      headline: 'President said the measures would run into 2026 and possibly beyond',
+      detail:
+        'Emory\'s president said the cost measures would continue into 2026 and possibly longer, and pointed to proposals in Congress to raise the endowment tax on private universities from 1.4% to as much as 21%.',
+      level: 'info',
+      source: {
+        publisher: 'Rough Draft Atlanta',
+        url: 'https://roughdraftatlanta.com/2025/03/07/emory-university-hiring-freeze/',
+        date: '2025-03-07',
+      },
+    },
+  ],
+}
+
+const UGA: UniversityIntel = {
+  university: 'UGA',
+  name: 'University of Georgia',
+  coverage: 'thin',
+  note:
+    'Only the FT ranking position could be cited to a verifiable date. UGA\'s own news service and the student paper publish without day-level dates that could be confirmed, and the university news page returned an access error. Searches surfaced a faculty hiring initiative, research expenditure of $654 million and new medical and nursing schools, but none of it could be pinned to a datable source, so none of it is recorded here. No adverse coverage was found.',
+  findings: [
+    {
+      id: 'uga-ranking-ft-mba-2026-60th',
+      university: 'UGA',
+      category: 'ranking',
+      headline: 'Terry placed 60th in the world for the MBA',
+      detail:
+        'The University of Georgia\'s Terry College ranked 60th in the Financial Times Global MBA Ranking 2026, down from 55th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+  ],
+}
+
+const NOTRE_DAME: UniversityIntel = {
+  university: 'Notre Dame',
+  name: 'University of Notre Dame',
+  coverage: 'thin',
+  note:
+    'Two datable findings. Notre Dame publishes its financial communications through the president\'s office without consistent dating, and no national outlet has reported figures for it in this cycle. Reported details of a 2.5% budget reduction, a halt on new construction and cancellation of more than $30 million in grants could not be tied to a datable source and are therefore not recorded. No adverse coverage was found.',
+  findings: [
+    {
+      id: 'notredame-ranking-ft-mba-2026-61st',
+      university: 'Notre Dame',
+      category: 'ranking',
+      headline: 'Mendoza placed 61st in the world for the MBA',
+      detail:
+        'Notre Dame Mendoza ranked 61st in the Financial Times Global MBA Ranking 2026, up from 75th the previous year — a substantial recovery.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'notredame-funding-budget-modelling-2025',
+      university: 'Notre Dame',
+      category: 'funding',
+      headline: 'Divisions told to model a 5% budget reduction',
+      detail:
+        'The president and executive officers asked division leaders to model a 5% budget reduction proactively in response to federal funding changes, and pointed to proposals to raise the endowment tax from 1.4% to as much as 21%.',
+      level: 'attention',
+      source: {
+        publisher: 'University of Notre Dame, Office of the President',
+        url: 'https://president.nd.edu/homilies-writings-and-addresses/a-message-from-the-executive-officers-impact-of-federal-funding-changes/',
+        date: '2025-03-07',
+      },
+    },
+  ],
+}
+
+const ROCHESTER: UniversityIntel = {
+  university: 'Rochester',
+  name: 'University of Rochester',
+  coverage: 'thin',
+  note:
+    'Two datable findings. Rochester generates little national coverage and its own budget communications are largely undated. A reported $40 million exposure from the proposed cap on indirect research costs could not be tied to a datable source and is not recorded. No leadership change, ranking commentary or adverse coverage was found from a datable source.',
+  findings: [
+    {
+      id: 'rochester-ranking-ft-mba-2026-62nd',
+      university: 'Rochester',
+      category: 'ranking',
+      headline: 'Simon placed 62nd in the world for the MBA',
+      detail:
+        'Rochester\'s Simon Business School ranked 62nd in the Financial Times Global MBA Ranking 2026, down from 60th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'rochester-policy-phd-intake-review-2025',
+      university: 'Rochester',
+      category: 'policy',
+      headline: 'Doctoral intake for 2026 under review as research overheads are cut',
+      detail:
+        'The provost said the university would work with doctoral programmes to evaluate admission numbers for autumn 2026 in response to a reduced federal overhead rate, and would begin charging part of PhD tuition to grants. Faculty hiring was sharply limited. Taught masters intakes were not named.',
+      level: 'attention',
+      source: {
+        publisher: 'University of Rochester, Office of the Provost',
+        url: 'https://www.rochester.edu/provost/academic-budget-and-planning-update/',
+        date: '2025-07-21',
+      },
+    },
+  ],
+}
+
+const BU: UniversityIntel = {
+  university: 'BU',
+  name: 'Boston University',
+  coverage: 'thin',
+  note:
+    'Two datable findings. Beyond the July 2025 layoff round, BU\'s budget communications and the student paper carry no dates that could be verified, and no national outlet has reported updated figures for it. No leadership change, faculty move or adverse coverage was found from a datable source.',
+  findings: [
+    {
+      id: 'bu-ranking-ft-mba-2026-64th',
+      university: 'BU',
+      category: 'ranking',
+      headline: 'Questrom placed 64th in the world for the MBA',
+      detail:
+        'Boston University\'s Questrom School ranked 64th in the Financial Times Global MBA Ranking 2026, up from 74th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'bu-funding-layoffs-2025',
+      university: 'BU',
+      category: 'funding',
+      headline: '120 staff laid off and 120 vacancies closed against a 5% budget cut',
+      detail:
+        'Boston University eliminated at least 120 staff posts and a further 120 vacant positions under a 5% budget cut. The president cited federal actions and funding cuts, inflation, declining graduate enrolment and technological disruption.',
+      level: 'attention',
+      source: {
+        publisher: 'Forbes',
+        url: 'https://www.forbes.com/sites/michaeltnietzel/2025/07/08/there-is-no-way-around-this-boston-university-to-lay-off-120-staff/',
+        date: '2025-07-08',
+      },
+    },
+  ],
+}
+
+const MICHIGAN_STATE: UniversityIntel = {
+  university: 'Michigan State',
+  name: 'Michigan State University',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'michiganstate-ranking-ft-mba-2026-67th',
+      university: 'Michigan State',
+      category: 'ranking',
+      headline: 'Broad placed 67th in the world for the MBA',
+      detail:
+        'Michigan State\'s Broad College ranked 67th in the Financial Times Global MBA Ranking 2026, its first ranked appearance in recent editions.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'michiganstate-funding-grant-terminations-2025',
+      university: 'Michigan State',
+      category: 'funding',
+      headline: '74 federally funded projects ended, a $104 million multi-year hit',
+      detail:
+        'The president reported 74 federally funded projects terminated with a multi-year impact of about $104 million, and at least 86 further projects hit with stop-work orders, funding pauses or conditional terminations. Ninety-nine posts were eliminated, and a fund of up to $5 million a year for three years was created to bridge graduate students and faculty who lost research funding.',
+      level: 'attention',
+      source: {
+        publisher: 'The Detroit News',
+        url: 'https://eu.detroitnews.com/story/news/local/michigan/2025/10/22/michigan-state-msu-number-jobs-eliminated-university-cuts-president-guskiewicz/86833813007/',
+        date: '2025-10-22',
+      },
+    },
+    {
+      id: 'michiganstate-funding-deficit-and-fees-2026',
+      university: 'Michigan State',
+      category: 'funding',
+      headline: 'Facing a $12 million deficit, tuition raised almost 4%',
+      detail:
+        'Michigan State went into the new year with a deficit above $12 million and raised tuition by nearly 4%. An applicant should budget for continued above-inflation fee increases at this institution.',
+      level: 'attention',
+      source: {
+        publisher: 'The Detroit News',
+        url: 'https://www.detroitnews.com/story/news/local/michigan/2026/06/12/msu-faces-budget-deficit-raises-tuition-costs-for-students/90521770007/',
+        date: '2026-06-12',
+      },
+    },
+  ],
+}
+
+const PITTSBURGH: UniversityIntel = {
+  university: 'Pittsburgh',
+  name: 'University of Pittsburgh',
+  coverage: 'thin',
+  note:
+    'Two datable findings. Pitt\'s student paper and much of its internal reporting carry no verifiable dates, and no national outlet has reported figures for it in this cycle. A reported pause and subsequent resumption of doctoral admissions, and a hiring freeze, could not be tied to a datable source and are not recorded. No leadership change or adverse coverage was found.',
+  findings: [
+    {
+      id: 'pittsburgh-ranking-ft-mba-2026-70th',
+      university: 'Pittsburgh',
+      category: 'ranking',
+      headline: 'Katz placed 70th in the world for the MBA',
+      detail:
+        'The University of Pittsburgh\'s Katz school ranked 70th in the Financial Times Global MBA Ranking 2026, its first ranked appearance in three years.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'pittsburgh-funding-federal-budget-exposure-2026',
+      university: 'Pittsburgh',
+      category: 'funding',
+      headline: 'Provost set out a second consecutive year of proposed federal research cuts',
+      detail:
+        'The provost told the Senate that the federal budget proposal would cut the National Science Foundation by 54% and National Institutes of Health base funding by 12%, cut federal work study by 90%, and eliminate several student aid and graduate assistance programmes outright. He expressed hope Congress would again moderate the proposals.',
+      level: 'attention',
+      source: {
+        publisher: 'University Times',
+        url: 'https://www.utimes.pitt.edu/news/white-house-budget',
+        date: '2026-05-01',
+      },
+    },
+  ],
+}
+
+const FORDHAM: UniversityIntel = {
+  university: 'Fordham',
+  name: 'Fordham University',
+  coverage: 'thin',
+  note:
+    'Only the FT ranking position could be cited to a verifiable date. Fordham\'s coverage sits almost entirely in two student papers whose articles carry no publication dates and which returned access errors. Reported measures — a forecast deficit for the 2026 financial year, a hiring pause, a 10% cut to non-staff spending and reduced work-study hours — could not be tied to a datable source and are not recorded. No adverse coverage was found.',
+  findings: [
+    {
+      id: 'fordham-ranking-ft-mba-2026-76th',
+      university: 'Fordham',
+      category: 'ranking',
+      headline: 'Gabelli placed 76th in the world for the MBA',
+      detail:
+        'Fordham\'s Gabelli School ranked 76th in the Financial Times Global MBA Ranking 2026, up from 78th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+  ],
+}
+
+const BYU: UniversityIntel = {
+  university: 'BYU',
+  name: 'Brigham Young University',
+  coverage: 'thin',
+  note:
+    'Only the FT ranking position could be cited to a verifiable date. BYU is privately funded by its sponsoring church, carries minimal federal research exposure and generates almost no national coverage, so the themes that dominate this corpus — federal funding cuts, endowment tax, settlements — do not arise. Its own news releases are undated. Note that BYU operates a two-tier tuition schedule under which non-members of the sponsoring church pay double; an applicant should verify which rate applies before a cost of attendance is accepted.',
+  findings: [
+    {
+      id: 'byu-ranking-ft-mba-2026-77th',
+      university: 'BYU',
+      category: 'ranking',
+      headline: 'Marriott placed 77th in the world for the MBA',
+      detail:
+        'Brigham Young University\'s Marriott School ranked 77th in the Financial Times Global MBA Ranking 2026, up from 83rd the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+  ],
+}
+
+const MIAMI: UniversityIntel = {
+  university: 'Miami',
+  name: 'University of Miami',
+  coverage: 'thin',
+  note:
+    'Only the FT ranking position could be cited to a verifiable date. The university\'s federal-policy and research pages are undated, and no outlet has reported budget, enrolment or funding figures for it in this cycle. A presidential search was under way at the time of research but no datable announcement was found. No adverse coverage was found.',
+  findings: [
+    {
+      id: 'miami-ranking-ft-mba-2026-78th',
+      university: 'Miami',
+      category: 'ranking',
+      headline: 'Herbert placed 78th in the world for the MBA',
+      detail:
+        'The University of Miami\'s Herbert Business School ranked 78th in the Financial Times Global MBA Ranking 2026, up from 99th the previous year — the largest proportional gain of any US school in the table.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+  ],
+}
+
+const WILLIAM_AND_MARY: UniversityIntel = {
+  university: 'William & Mary',
+  name: 'College of William & Mary',
+  coverage: 'thin',
+  note:
+    'Two datable findings, both from the institution\'s own news service. William & Mary generates little national coverage and has not reported federal research losses, leadership change or adverse events in this cycle. Its published planning refers to scenario analysis against possible federal cuts rather than realised losses, so nothing quantified could be recorded.',
+  findings: [
+    {
+      id: 'williamandmary-ranking-ft-mba-2026-82nd',
+      university: 'William & Mary',
+      category: 'ranking',
+      headline: 'The Mason School placed 82nd in the world for the MBA',
+      detail:
+        'William & Mary\'s Raymond A. Mason School ranked 82nd in the Financial Times Global MBA Ranking 2026, down from 80th the previous year.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'williamandmary-policy-fee-increases-2026',
+      university: 'William & Mary',
+      category: 'policy',
+      headline: 'Fees, room and board all rising across the next two years',
+      detail:
+        'The board approved mandatory fee increases of 3.1% and 3.5% across two successive years, with room rates up 6.5% and dining up 6% in both. Planning includes scenario analysis against federal research cuts and changes to federal financial aid.',
+      level: 'attention',
+      source: {
+        publisher: 'W&M News',
+        url: 'https://news.wm.edu/2026/04/24/with-a-focus-on-affordability-careers-and-value-wm-board-approves-budget/',
+        date: '2026-04-24',
+      },
+    },
+  ],
+}
+
+const WISCONSIN: UniversityIntel = {
+  university: 'Wisconsin',
+  name: 'University of Wisconsin–Madison',
+  coverage: 'adequate',
+  findings: [
+    {
+      id: 'wisconsin-ranking-ft-mba-2026-84th',
+      university: 'Wisconsin',
+      category: 'ranking',
+      headline: 'The Wisconsin School of Business placed 84th in the world',
+      detail:
+        'The Wisconsin School of Business ranked 84th in the Financial Times Global MBA Ranking 2026, its first ranked appearance in recent editions.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+    {
+      id: 'wisconsin-funding-federal-research-down-2026',
+      university: 'Wisconsin',
+      category: 'funding',
+      headline: 'Federal research funding down 17%, with 145 grants stopped',
+      detail:
+        'UW-Madison recorded a 17% fall in federal research funding, with about 145 grants terminated or hit with stop-work orders and at least $27 million lost, and 375 fewer grants awarded than the prior year. Forty-three grants were reinstated after legal challenges. Schools and colleges took a 5% base budget cut, administrative units 7%.',
+      level: 'attention',
+      source: {
+        publisher: 'Wisconsin Public Radio',
+        url: 'https://www.wpr.org/news/university-wisconsin-madison-federal-research-grants-funding-cuts-trump',
+        date: '2026-02-09',
+      },
+    },
+    {
+      id: 'wisconsin-leadership-chancellor-departure-2026',
+      university: 'Wisconsin',
+      category: 'leadership',
+      headline: 'Chancellor left to become president of Columbia',
+      detail:
+        'Jennifer Mnookin left the chancellorship to become president of Columbia University from 1 July 2026, with a dean serving as interim chancellor from 17 May and a permanent appointment not expected before the end of 2026. The same move is recorded against Columbia.',
+      level: 'attention',
+      source: {
+        publisher: 'Wisconsin Public Radio',
+        url: 'https://www.wpr.org/news/university-wisconsin-madison-federal-research-grants-funding-cuts-trump',
+        date: '2026-02-09',
+      },
+    },
+  ],
+}
+
+const HULT: UniversityIntel = {
+  university: 'Hult',
+  name: 'Hult International Business School',
+  coverage: 'thin',
+  note:
+    'Only the FT ranking position could be cited to a verifiable date. Hult is a small private business school rather than a research university, so the federal funding, endowment tax and grant-termination themes that dominate this corpus do not apply to it. Everything else that surfaced came from ranking aggregators rather than datable primary reporting. One structural point worth flagging without a citation to hang it on: Hult teaches across campuses in several countries, so an applicant\'s study location — and therefore their visa route and cost of attendance — needs to be confirmed against the offer letter rather than assumed to be the United States.',
+  findings: [
+    {
+      id: 'hult-ranking-ft-mba-2026-89th',
+      university: 'Hult',
+      category: 'ranking',
+      headline: 'Hult placed 89th in the world for the MBA',
+      detail:
+        'Hult International Business School ranked 89th in the Financial Times Global MBA Ranking 2026, down from 92nd the previous year. It is the lowest-placed US entry in the table.',
+      level: 'info',
+      programmeTags: ['MBA'],
+      source: FT_MBA_2026,
+    },
+  ],
+}
+
 // ---- Corpus -----------------------------------------------------------------
-// Ordered to match US_UNIVERSITIES so the two can be diffed by eye.
+// The first 14 match US_UNIVERSITIES in order, so the two can be diffed by eye.
+// The remaining 31 are the FT Global MBA Ranking 2026 additions, in FT rank
+// order. They are not selectable until US_UNIVERSITIES is extended.
 
 export const UNIVERSITY_INTEL: UniversityIntel[] = [
   MIT,
@@ -955,6 +2399,50 @@ export const UNIVERSITY_INTEL: UniversityIntel[] = [
   USC,
   STEVENS,
   CLARK,
+
+  // FT Global MBA Ranking 2026 additions — not yet selectable.
+  PENN,
+  NORTHWESTERN,
+  CORNELL,
+  DUKE,
+  YALE,
+  UVA,
+  CHICAGO,
+  DARTMOUTH,
+  UCLA,
+  MICHIGAN,
+  WASHU,
+  RICE,
+  UNC,
+  UT_AUSTIN,
+  GEORGIA_TECH,
+  UW,
+  GEORGETOWN,
+  VANDERBILT,
+  EMORY,
+  UGA,
+  NOTRE_DAME,
+  ROCHESTER,
+  BU,
+  MICHIGAN_STATE,
+  PITTSBURGH,
+  FORDHAM,
+  BYU,
+  MIAMI,
+  WILLIAM_AND_MARY,
+  WISCONSIN,
+  HULT,
+]
+
+/**
+ * The 14 short names that US_UNIVERSITIES currently carries. Everything in
+ * UNIVERSITY_INTEL outside this set has a dossier but is not yet selectable on
+ * the pre-qualification screen — see the coverage note at the top of this file.
+ * Exported so a caller can tell the two apart without importing from lib/.
+ */
+export const SELECTABLE_UNIVERSITIES: readonly string[] = [
+  'MIT', 'Stanford', 'Harvard', 'CMU', 'Columbia', 'UC Berkeley', 'Purdue',
+  'Northeastern', 'ASU', 'UT Dallas', 'NYU', 'USC', 'Stevens', 'Clark',
 ]
 
 /**
