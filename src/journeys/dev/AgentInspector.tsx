@@ -521,12 +521,26 @@ interface UniProbe {
  *  university and programme names: those are the customer's own facts and appear
  *  all over their screens legitimately. What must never appear is the research —
  *  publishers, source titles, links, the synthesis and the category labels. */
-function briefNeedles(brief: UniversityBrief): string[] {
+function briefNeedles(brief: UniversityBrief, app: Application): string[] {
   const out: string[] = [brief.headline, ...brief.synthesis]
   for (const s of brief.sources) {
     out.push(s.id, s.url, s.publisher, s.headline, s.detail, s.categoryLabel)
   }
-  return out.filter((s) => s.trim().length > 3)
+  // The customer's OWN facts appear on their screens legitimately, so a needle
+  // that is merely their university or programme name is not a leak.
+  //
+  // This is not hypothetical tidying: a university press office is a legitimate
+  // source, and the corpus carries `publisher: 'Dartmouth'`. Without this the
+  // detector reported a leak on every Dartmouth file — a false positive that,
+  // left in, would have trained a reader to ignore a red "LEAKING" banner.
+  //
+  // Everything that actually matters survives: URLs, source headlines, details,
+  // corpus ids, synthesis lines and category labels are none of them substrings
+  // of a university name.
+  const benign = `${app.university} ${app.universityShort} ${app.program}`.toLowerCase()
+  return out
+    .filter((s) => s.trim().length > 3)
+    .filter((s) => !benign.includes(s.trim().toLowerCase()))
 }
 
 function probeUniversity(app: Application): UniProbe {
@@ -559,7 +573,7 @@ function probeUniversity(app: Application): UniProbe {
     tasks: tasksFor(withBrief),
     status: customerFacingStatus(withBrief),
   })
-  const leaks = briefNeedles(brief).filter((n) => customerSurface.includes(n))
+  const leaks = briefNeedles(brief, app).filter((n) => customerSurface.includes(n))
 
   return {
     appId: app.appId,

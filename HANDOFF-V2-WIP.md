@@ -241,9 +241,44 @@ Three decisions worth knowing before extending this:
    scorecards, not the I-20; CJ-11's relationship is on the relationship proof.
    Declaring those would create obligations CJ-28 could never discharge.
 
-**Still unwired:** the scorecard shapes added in Phase A (GRE/GMAT/LSAT/IELTS-TOEFL)
-have no `SmartFill` on CJ-10 — that screen asks for five scores and only the
-I-20 is offered. A second `SmartFill` scoped to E4 would close it.
+Point 3 above no longer holds for CJ-10's scores — see the closeout below.
+
+### Phase A + B closeout — five loose ends, all closed
+
+A sweep for "built but not wired" found five. All five are now done and walked
+live on APP-2901.
+
+1. **Scorecard `SmartFill` on CJ-10.** The Phase A scorecard shapes had no
+   consumer. CJ-10 now offers two more cards inside the Test scores section:
+   the entrance report chosen by programme (`entranceDocFor` — GRE for MS/MA/PhD,
+   GMAT for MBA/Mgmt, LSAT for JD, following E4's own conditionality) and the
+   IELTS/TOEFL report. A second `useDeclaration` on `Entrance & language (E4)`
+   records the scores, which previously lived only in an audit remark — the same
+   gap `Academics` had. Whichever report is uploaded *last* is the evidence
+   source; scores it did not carry stay `pending` and owed, which is the safe
+   direction.
+2. **The three-agent swarm now runs on ordinary checklist uploads.** `SmartFill`
+   only ever covered six screens; `DocFlows.Capture` — where most of a file's
+   97 documents actually arrive — ran the bare `runCapture` path. It now shows
+   the same three lanes. Hooks sit above the `if (!doc)` guard, per defect #7.
+3. **`ConfirmDetails` no longer shows customers `"as printed"`.** Its two
+   `extractFields` calls had no `ExtractionContext` — defect #5's fix landed in
+   `SmartFill` and never reached the older path. A passport upload now reads
+   "Name: Ananya Rao".
+4. **The validation agent's results are persisted.** New store verb
+   `recordAgentFindings(appId, docId, results, actor)` merges the agent's
+   `ValidationResult[]` into `app.validations`. That array is what
+   `evaluateGate` reads, so a rule the agent fails genuinely holds the file —
+   verified: a passport upload failed `VAL-INT-04`, which sits in the **S03**
+   forward gate marked `nonOverridable`.
+5. **`hasBlocking` has a consumer.** It selects the audit verb, so a
+   BLOCK-severity finding does not read like a warning:
+   `AGENT CHECKS — BLOCKING — Passport … 3 validation(s) recorded, 1 failed ·
+   A PERSON MUST LOOK BEFORE THIS FILE MOVES`.
+
+**Still not surfaced:** `FraudOutput`'s score and signals are counted in the
+audit line but have nowhere to live on the application. That is Phase F's
+"agent findings on the Integrations and HITL views", not a gap here.
 
 ### Phase C remainder
 
@@ -388,17 +423,23 @@ applications. The 12 unresolved names are genuinely absent from the corpus
 (Boston College, IIT Chicago, JHU, NC State, Ohio State, Penn State, Rutgers,
 Texas A&M, UB SUNY, UF, UIUC, UMass Amherst).
 
-**Two decisions left open, deliberately:**
+**`US_UNIVERSITIES` was extended to 45 by the parallel session** — the 31 FT US
+schools not already listed. They correctly did **not** reuse `rank` for the FT
+position: an FT MBA rank is not a global university rank, and feeding Wharton's FT
+rank of 1 into `overlayFor()` would have been a category error that silently
+widened a ceiling. All 31 additions omit `rank` entirely.
 
-1. **`US_UNIVERSITIES` was NOT extended.** It is still the 14 the pre-qualification
-   screen offers, so an MBA applicant cannot *select* most of the 45 researched
-   schools. Extending it is not wiring: `rank` feeds `overlayFor()`, which sets the
-   **premier overlay and the loan ceiling**. Adding 50 entries with ranks changes
-   how much money people can borrow.
-2. **An FT MBA rank is not a global university rank.** `overlayFor()` expects the
-   latter (MIT = 1). Feeding Wharton's FT rank of 1 into it would be a category
-   error that silently widens a ceiling. If the selectable list does grow, the FT
-   rank needs its own field and its own overlay rule — not a reuse of `rank`.
+> **⚠ OPEN CREDIT DECISION — the omission has its own consequence.**
+> `overlayFor(undefined)` returns `{ overlay: null, ceilingInr: null }`. So an
+> applicant to **Wharton, Booth, Kellogg, Yale SOM, Haas, Tuck or Darden now gets
+> NO premier overlay**, while a **Purdue** applicant (rank 89) still gets the
+> `Global-Rank-Top-100` overlay and its raised unsecured ceiling. The policy intent
+> is inverted for exactly the schools the extension was for.
+>
+> This is a policy call, not a wiring bug, so it has been left alone. The fix is
+> either a global rank for each new entry, or a separate `ftRank` field with its
+> own overlay rule in `POLICY.premierOverlayCeilings`. **Do not paper over it by
+> putting FT ranks in `rank`.**
 
 #### Defects and traps found during Phase E
 
@@ -411,6 +452,7 @@ Texas A&M, UB SUNY, UF, UIUC, UMass Amherst).
 | 14 | **`Penn State University` was resolving to the `Penn` (Wharton) dossier.** Found live in the resolution diagnostic the moment the corpus grew to 45. Both names reduce to a shared `penn` token, and the institution-defining leftover `state` was only being checked inside the place-name branch. A Penn State applicant was being handed Wharton's brief — sourced, plausible, and about the wrong university. | **Fixed.** The institution-token rule is now general, not place-only. Guarded in the checked-in table alongside `Michigan`/`Michigan State` and `Boston University`/`Boston College`. |
 | 15 | **`University of Washington` matched `Washington University`.** Both reduce to `{washington}`; identical place-only token sets were being allowed. Different institutions, opposite sides of the country, and the corpus carries both (`UW`, `WashU`). | **Fixed** — a bare place name never carries a match. The legitimate version goes through the exact lookup on the dossier's own `name`. |
 | 16 | **The brief claimed a parent-university dossier was "the business school for this programme".** The clause was gated on the *programme* being a business programme rather than on the *key* naming a school. Since the corpus files MBA dossiers under the parent short name (`Michigan`, not `Ross`), it described the dossier wrongly — a small lie on a credit surface. | **Fixed** — the clause now requires the matched key to name a school. |
+| 18 | **The customer-leak detector false-positived on `publisher: 'Dartmouth'`.** A university press office is a legitimate source, so a publisher name can equal the institution name — which appears on customer surfaces perfectly legitimately. The detector reported `1 LEAKING` on every Dartmouth file. Left in, it would have trained a reader to ignore a red banner, which is worse than not having the check. | **Fixed** — needles that are substrings of the file's own university/programme are excluded. URLs, source headlines, details, corpus ids and synthesis lines are unaffected; none of them is a substring of a university name. |
 | 17 | **`Georgia Tech` does not token-match `Georgia Institute of Technology`** — `Tech` and `Technology` are different tokens. Harmless today because the corpus files it as `Georgia Tech`, but it is a real limit of structural matching. | Open, documented in the guard table. **File dossiers under the short key the seed uses.** |
 | 13 | **A full page reload resets the clock offset.** `_offsetHours` is a module global in `lib/clock.ts`, so a browser reload silently returns to +0h. Verifying the re-crawl therefore requires **client-side** navigation (in-app links/tabs); a `location.assign` between advancing the clock and opening the file will make the re-crawl appear not to fire. Cost a false negative during verification. | Open, inherent to the design. **Demo the clock and the brief without reloading.** |
 
