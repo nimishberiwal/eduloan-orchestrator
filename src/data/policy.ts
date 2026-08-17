@@ -50,6 +50,28 @@ export const POLICY = {
   netAskGapPct: 2, // net-ask ↔ L1 gap ≤ 2%
   lrsCapUsd: 250_000, // USD 250,000 per FY per resident (student + parent aggregate)
 
+  /** §Phase D — the rate the sanction letter, the KFS and the repayment
+   *  schedule all quote. It was previously a bare 10.5 inside a private helper
+   *  in lib/eligibility.ts with the comment "the sanction letter carries the
+   *  real ROI band"; when the sanction letter came to be written there was
+   *  nothing for it to carry. One figure, read by both, so the indicative
+   *  maths and the formal papers cannot quote different numbers. */
+  sanctionRoi: {
+    annualPct: 10.5,
+    basis: 'Floating — resets annually against the lender’s benchmark',
+    note: 'ASSUMPTION — editable. Also drives the indicative moratorium interest.',
+  },
+
+  /** §Phase D — the moratorium the repayment schedule needs in MONTHS.
+   *  `moratorium` below is the customer-facing sentence; a schedule needs a
+   *  number, and the application carries `programLevel` but no duration. */
+  courseMonthsByLevel: {
+    Masters: 24,
+    PhD: 48,
+    'PG-Diploma': 12,
+  } as Record<string, number>,
+  postCourseMoratoriumMonths: 6,
+
   sanctionValidityDays: 180,
   sanctionAlertAmberDays: 30, // T-30 amber
   sanctionAlertRedDays: 7, // T-7 red

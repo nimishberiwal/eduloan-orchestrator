@@ -71,10 +71,11 @@ export function foirVerdictFor(foirPct: number): FoirVerdict {
 /** Interest accruing during the moratorium, as a monthly figure. Indicative
  *  only — the real EMI is set at sanction. */
 function moratoriumMonthlyInterest(principalInr: number): number {
-  // A mid-band education-loan rate for the indicative maths. The sanction
-  // letter carries the real ROI band; nothing here is quoted as final.
-  const annualPct = 10.5
-  return (principalInr * (annualPct / 100)) / 12
+  // Reads POLICY, so the indicative maths and the sanction pack quote the SAME
+  // rate. It was a bare 10.5 here, under a comment saying the sanction letter
+  // carried the real band — and when the letter came to be written (Phase D)
+  // there was no band for it to carry.
+  return (principalInr * (POLICY.sanctionRoi.annualPct / 100)) / 12
 }
 
 export function quote(input: EligibilityInput, now: string = nowIso()): IndicativeOffer {

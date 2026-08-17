@@ -30,6 +30,9 @@ import { POLICY } from '@/data/policy'
 import { fmtDate, sanctionCountdown } from '@/lib/format'
 import { TIER_LABEL, tierFor } from '@/lib/eligibility'
 import { covenantCopy } from '@/lib/plainLanguage'
+import { gatesFor } from '@/lib/declared'
+import { docToText } from '@/lib/agents/sanction'
+import { downloadText, stampedName } from '@/lib/csv'
 import { useJourney } from '@/journeys/useJourney'
 
 // ---------------------------------------------------------------------------
@@ -99,7 +102,16 @@ export function Sanction({ app }: { app: Application }) {
           value={`${POLICY.marginPct}%`}
           hint="The part of the cost you fund yourself"
         />
-        <DataRow label="Interest rate" value="Floating, 9.75%–11.25%" hint="Set at first disbursement" />
+        {/* POLICY, not a hardcoded band. This read "Floating, 9.75%–11.25%"
+            while the sanction letter and the Key Facts Statement — both
+            generated from POLICY.sanctionRoi — quoted a single contracted
+            rate. Two numbers for the same loan on two screens the customer
+            sees minutes apart. */}
+        <DataRow
+          label="Interest rate"
+          value={`${POLICY.sanctionRoi.annualPct.toFixed(2)}% a year`}
+          hint={POLICY.sanctionRoi.basis}
+        />
         <DataRow label="Repayment starts" value="After the course" hint={POLICY.moratorium} />
         <DataRow label="First instalment" value="18–30 months from today" hint={POLICY.moratoriumNote} />
         <DataRow
@@ -108,6 +120,45 @@ export function Sanction({ app }: { app: Application }) {
         />
         <DataRow label="Offer valid until" value={fmtDate(app.sanctionExpiryDate)} />
       </GCard>
+
+      {/* §Phase D — the papers written for the customer. `audience` is filtered
+          HERE and not by convention: the CAM and the internal risk note are in
+          the same container, and a customer must never open one. */}
+      {(app.generatedDocs ?? []).some((d) => d.audience === 'customer') ? (
+        <>
+          <SectionHeading>Your paperwork</SectionHeading>
+          <ul className="mb-4 space-y-2">
+            {(app.generatedDocs ?? [])
+              .filter((d) => d.audience === 'customer')
+              .map((d) => (
+                <li key={d.id}>
+                  <GCard>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="display text-[15px] font-semibold leading-[21px]">{d.title}</p>
+                        <p className="mt-0.5 text-[13px] text-[var(--grey-600)]">
+                          {d.sections[0]?.rows
+                            .slice(0, 2)
+                            .map((r) => `${r.label}: ${r.value}`)
+                            .join(' · ')}
+                        </p>
+                      </div>
+                      <GButton
+                        size="sm"
+                        tone="secondary"
+                        onClick={() =>
+                          downloadText(stampedName(d.title, d.producedAt, 'txt'), docToText(d))
+                        }
+                      >
+                        Download
+                      </GButton>
+                    </div>
+                  </GCard>
+                </li>
+              ))}
+          </ul>
+        </>
+      ) : null}
 
       {app.covenants.filter((c) => c.status === 'open').length > 0 ? (
         <>
@@ -482,7 +533,9 @@ export function Disbursement({ app }: { app: Application }) {
       ) : (
         <ul className="space-y-3">
           {app.tranches.map((t) => {
-            const failing = t.gates.filter((g) => !g.passed)
+            // `gatesFor`, not `t.gates` — the declaration gate is derived at
+            // read time and lands on tranche 1.
+            const failing = gatesFor(app, t).filter((g) => !g.passed)
             const done = t.status === 'remitted' || t.status === 'released'
             return (
               <li key={t.id}>
@@ -574,6 +627,7 @@ function plainClearBy(clearBy: string): string {
  *  customer — so the caller dedupes on the output, not the input. */
 function plainGate(label: string): string {
   const l = label.toLowerCase()
+  if (l.includes('self-declared')) return 'The details you typed in, checked against your documents'
   if (l.includes('visa') || l.includes('endorsement')) return 'Your stamped visa'
   if (l.includes('foreign banking') || l.includes('forex')) {
     return 'Your account abroad, or a forex card'
