@@ -232,6 +232,26 @@ export const US_UNIVERSITIES: UniversityRef[] = [
   // To populate: pick the one ranking table the credit policy actually uses and
   // apply it to all 45 rows at once, so overlays stay comparable across them.
   //
+  // ALREADY CONSIDERED AND REJECTED (2026-08-17): using the FT Global MBA
+  // Ranking 2026 positions as the rank. Do not re-open this without new
+  // information — the arithmetic was run and it fails on three counts.
+  //   1. Six of the 45 are not in that ranking at all. Stanford withdrew from
+  //      participation and Columbia missed the alumni-survey threshold, so
+  //      both drop top50 -> NO overlay, and Purdue drops top100 -> none. A
+  //      Stanford applicant would lose their unsecured uplift because a
+  //      business school declined to return a questionnaire.
+  //   2. `rank` is programme-agnostic — it sets the ceiling for MS, MPH and
+  //      LLM files too — whereas the FT table ranks only the MBA. A Stanford
+  //      MS Computer Science file would be marked down for the MBA
+  //      programme's non-participation.
+  //   3. US positions in that table span 1..89, so 23 schools land in the
+  //      top50 band and 16 in top100: universities carrying any unsecured
+  //      uplift would go from 8 to 39. That is a wholesale loosening of
+  //      unsecured exposure, not a data fix.
+  // The FT position is already carried per university as a `ranking` finding
+  // in data/universityIntel.ts, which is where a newspaper's MBA ranking
+  // belongs — informing a credit view, not setting a ceiling.
+  //
   // `stem` drives only the post-study work duration shown on the file, not any
   // credit outcome. It is set true where the university runs a substantial
   // engineering or computing school, false otherwise.
