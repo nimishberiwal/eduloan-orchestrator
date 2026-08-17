@@ -206,6 +206,8 @@ value first and watching the swarm overwrite it (COA 50000 → 62400, income
 | 9 | **A co-applicant's PAN prefilled the STUDENT's name.** `extractionContext(app)` had no idea whose document it was building context for, so `contextual.name` was always the applicant. Defect #6 in a new place. | `extractionContext(app, doc)` resolves the owning party from the document's bucket section. Where that party hasn't joined there is no name to read, so it falls back to the placeholder and the screen skips the prefill. |
 | 10 | **The same fix in one place only.** `runExtraction` built its own `extractionContext(app)` — and *that* is what feeds `fieldsFromRun`, so the form kept prefilling the wrong name after #9 was fixed. Two call sites, one fixed. | Passed `doc` at both. Caught only by walking the screen, not by `tsc`. |
 | 11 | **CJ-11 recorded a false discrepancy:** entered "Rajesh Rao", read `"as printed"`, `match: 'fail'`. The reader's own placeholder was compared as if it were a reading. | `declared.ts` treats `as printed` / `—` as no reading. A field the document didn't evidence now goes back to `selfDeclared: true, match: 'pending'` so it stays owed for CJ-28, instead of `selfDeclared: false` where `pendingDeclarations` silently dropped it. |
+| 12 | **`ConfirmDetails` showed customers the placeholder.** Defect #5's `ExtractionContext` fix was applied in `SmartFill` only, so the ORIGINAL upload path — the one most documents take — still rendered "Name: as printed" on the confirm screen. | Passed `extractionContext(app, doc)` at both `extractFields` call sites in `DocFlows`. A fix that lands in the new path and not the old one is not a fix. |
+| 13 | **The validation agent's output was discarded.** `runValidation` built real `ValidationResult`s off the real catalogue and nothing consumed `ValidationOutput` — so nothing the swarm found reached the Validations tab or `evaluateGate`, and `hasBlocking` was dead code. | `recordAgentFindings` persists them and `hasBlocking` picks the audit verb. See §7's closeout. |
 
 ---
 
@@ -429,32 +431,54 @@ position: an FT MBA rank is not a global university rank, and feeding Wharton's 
 rank of 1 into `overlayFor()` would have been a category error that silently
 widened a ceiling. All 31 additions omit `rank` entirely.
 
-> **⚠ OPEN CREDIT DECISION — the omission has its own consequence.**
-> `overlayFor(undefined)` returns `{ overlay: null, ceilingInr: null }`. So an
-> applicant to **Wharton, Booth, Kellogg, Yale SOM, Haas, Tuck or Darden now gets
-> NO premier overlay**, while a **Purdue** applicant (rank 89) still gets the
-> `Global-Rank-Top-100` overlay and its raised unsecured ceiling. The policy intent
-> is inverted for exactly the schools the extension was for.
+> **⚠ CREDIT DECISION — DECIDED, with two consequences to implement carefully.**
 >
-> This is a policy call, not a wiring bug, so it has been left alone. The fix is
-> either a global rank for each new entry, or a separate `ftRank` field with its
-> own overlay rule in `POLICY.premierOverlayCeilings`. **Do not paper over it by
-> putting FT ranks in `rank`.**
+> The omission had its own consequence: `overlayFor(undefined)` returns
+> `{ overlay: null, ceilingInr: null }`, so Wharton, Booth, Kellogg, Yale SOM, Haas
+> and Tuck got **no** premier overlay while **Purdue** at rank 89 still got
+> `Global-Rank-Top-100` — the policy intent inverted for exactly the schools the
+> extension was for.
+>
+> **The user has decided: set `rank` from the FT MBA table.** Being applied by the
+> corpus session, which owns `eligibility.ts`. Two things verified here that the
+> implementation has to account for:
+>
+> **1. Every FT school lands in the top-50 band.** FT positions run 1…39, and
+> `overlayFor` maps `rank <= 50` → `Global-Rank-Top-50` → **₹75L** unsecured
+> (`POLICY.premierOverlayCeilings`), not the ₹50L top-100 ceiling. That flows into
+> `unsecuredCeiling` → `securityRequired = tier === 'tier3' && askInr >
+> unsecuredCeiling` (`eligibility.ts:94`), so **collateral requirements flip on any
+> Tier-3 ask between ₹50L and ₹75L**. Hult, Fordham, BYU, Miami, William & Mary,
+> Michigan State and Pittsburgh all get the same ₹75L ceiling as Wharton.
+>
+> **2. The basis label will be wrong, and the right one already exists.**
+> `PreQual.tsx:511` derives the label purely from the band:
+> `a.overlayBasis = offer.premierOverlay === 'top50' ? 'Global-Rank-Top-50' : …`.
+> So an FT-derived overlay gets stamped **`Global-Rank-Top-50`** — asserting a
+> global university ranking that was never consulted. It is rendered on the
+> Decision tab (`tabs.tsx:378`) and in the Tier chip tooltip (`badges.tsx:30`).
+>
+> `OverlayBasis` **already carries `'Programmatic-Top'`**, and `POLICY`'s own note
+> names the valid bases as *"QS/THE/ARWU rank or programmatic-top (AACSB/ABET) or
+> lender-curated"*. An FT MBA ranking is precisely a programmatic basis. **Set
+> `overlayBasis = 'Programmatic-Top'` for the FT-derived entries** rather than
+> letting the band-derived ternary mislabel them — otherwise the audit trail says
+> the bank relied on a global rank it did not use.
 
 #### Defects and traps found during Phase E
 
 | # | Finding | State |
 |---|---|---|
-| 9 | **`src/data/universityIntel.ts` did not exist when Phase E started** — repo clean, no stash, nothing on disk. Phase E was built against a placeholder stub at a *separate* path (`universityIntel.stub.ts`) so it could not collide with the parallel session's file. The real corpus landed mid-build; the wiring was rewired to it and the stub deleted. | Resolved. **This tree is shared by two live sessions** — `git status` changed under me during the build. Check it before assuming a file is missing. |
-| 10 | **The corpus and the bulk seed name different universities.** The corpus keys on `US_UNIVERSITIES` (the 14 the pre-qual screen can select). The bulk seed draws from a wider list, so **10 of APP-2601…2614 resolve to `coverage: 'absent'`** — only Purdue (2605), CMU (2607), NYU (2609) and USC (2612) have a dossier. Journey-created files (APP-2901+) always resolve. | **Open, by design but worth a decision.** Demo on 2605/2607/2609/2612 or on a journey file. Renaming seed universities would fix it but means editing `seed.ts` — forbidden. |
-| 11 | **`audit()` defaults `ts` to `NOW_ISO` — the UN-OFFSET frozen base** (`lib/format.ts:51`), not `nowIso()`. Any audit line written after the operator advances the clock is stamped at the base instant, so a +25h refresh would appear to have happened at 10:00 on the base day — hiding exactly what a reviewer came to see. | Overridden locally (`ts: brief.fetchedAt`). **Every other verb in the store still has this.** Phase D's sanction pack will hit it. |
-| 12 | **`AgentInspector.tsx:207` uses `Date.now()`** in the `LiveRun` plan seed (pre-existing). Presentation only — it reseeds the stagger so a re-run looks different — and it does not touch results, so determinism is unaffected. Flagged because the standing rule is *no `Date.now()` in prototype logic* and a reader will trip over it. | Open, benign. |
-| 14 | **`Penn State University` was resolving to the `Penn` (Wharton) dossier.** Found live in the resolution diagnostic the moment the corpus grew to 45. Both names reduce to a shared `penn` token, and the institution-defining leftover `state` was only being checked inside the place-name branch. A Penn State applicant was being handed Wharton's brief — sourced, plausible, and about the wrong university. | **Fixed.** The institution-token rule is now general, not place-only. Guarded in the checked-in table alongside `Michigan`/`Michigan State` and `Boston University`/`Boston College`. |
-| 15 | **`University of Washington` matched `Washington University`.** Both reduce to `{washington}`; identical place-only token sets were being allowed. Different institutions, opposite sides of the country, and the corpus carries both (`UW`, `WashU`). | **Fixed** — a bare place name never carries a match. The legitimate version goes through the exact lookup on the dossier's own `name`. |
-| 16 | **The brief claimed a parent-university dossier was "the business school for this programme".** The clause was gated on the *programme* being a business programme rather than on the *key* naming a school. Since the corpus files MBA dossiers under the parent short name (`Michigan`, not `Ross`), it described the dossier wrongly — a small lie on a credit surface. | **Fixed** — the clause now requires the matched key to name a school. |
-| 18 | **The customer-leak detector false-positived on `publisher: 'Dartmouth'`.** A university press office is a legitimate source, so a publisher name can equal the institution name — which appears on customer surfaces perfectly legitimately. The detector reported `1 LEAKING` on every Dartmouth file. Left in, it would have trained a reader to ignore a red banner, which is worse than not having the check. | **Fixed** — needles that are substrings of the file's own university/programme are excluded. URLs, source headlines, details, corpus ids and synthesis lines are unaffected; none of them is a substring of a university name. |
-| 17 | **`Georgia Tech` does not token-match `Georgia Institute of Technology`** — `Tech` and `Technology` are different tokens. Harmless today because the corpus files it as `Georgia Tech`, but it is a real limit of structural matching. | Open, documented in the guard table. **File dossiers under the short key the seed uses.** |
-| 13 | **A full page reload resets the clock offset.** `_offsetHours` is a module global in `lib/clock.ts`, so a browser reload silently returns to +0h. Verifying the re-crawl therefore requires **client-side** navigation (in-app links/tabs); a `location.assign` between advancing the clock and opening the file will make the re-crawl appear not to fire. Cost a false negative during verification. | Open, inherent to the design. **Demo the clock and the brief without reloading.** |
+| E1 | **`src/data/universityIntel.ts` did not exist when Phase E started** — repo clean, no stash, nothing on disk. Phase E was built against a placeholder stub at a *separate* path (`universityIntel.stub.ts`) so it could not collide with the parallel session's file. The real corpus landed mid-build; the wiring was rewired to it and the stub deleted. | Resolved. **This tree is shared by two live sessions** — `git status` changed under me during the build. Check it before assuming a file is missing. |
+| E2 | **The corpus and the bulk seed name different universities.** The corpus keys on `US_UNIVERSITIES` (the 14 the pre-qual screen can select). The bulk seed draws from a wider list, so **10 of APP-2601…2614 resolve to `coverage: 'absent'`** — only Purdue (2605), CMU (2607), NYU (2609) and USC (2612) have a dossier. Journey-created files (APP-2901+) always resolve. | **Open, by design but worth a decision.** Demo on 2605/2607/2609/2612 or on a journey file. Renaming seed universities would fix it but means editing `seed.ts` — forbidden. |
+| E3 | **`audit()` defaults `ts` to `NOW_ISO` — the UN-OFFSET frozen base** (`lib/format.ts:51`), not `nowIso()`. Any audit line written after the operator advances the clock is stamped at the base instant, so a +25h refresh would appear to have happened at 10:00 on the base day — hiding exactly what a reviewer came to see. | Overridden locally (`ts: brief.fetchedAt`). **Every other verb in the store still has this.** Phase D's sanction pack will hit it. |
+| E4 | **`AgentInspector.tsx:207` uses `Date.now()`** in the `LiveRun` plan seed (pre-existing). Presentation only — it reseeds the stagger so a re-run looks different — and it does not touch results, so determinism is unaffected. Flagged because the standing rule is *no `Date.now()` in prototype logic* and a reader will trip over it. | Open, benign. |
+| E5 | **`Penn State University` was resolving to the `Penn` (Wharton) dossier.** Found live in the resolution diagnostic the moment the corpus grew to 45. Both names reduce to a shared `penn` token, and the institution-defining leftover `state` was only being checked inside the place-name branch. A Penn State applicant was being handed Wharton's brief — sourced, plausible, and about the wrong university. | **Fixed.** The institution-token rule is now general, not place-only. Guarded in the checked-in table alongside `Michigan`/`Michigan State` and `Boston University`/`Boston College`. |
+| E6 | **`University of Washington` matched `Washington University`.** Both reduce to `{washington}`; identical place-only token sets were being allowed. Different institutions, opposite sides of the country, and the corpus carries both (`UW`, `WashU`). | **Fixed** — a bare place name never carries a match. The legitimate version goes through the exact lookup on the dossier's own `name`. |
+| E7 | **The brief claimed a parent-university dossier was "the business school for this programme".** The clause was gated on the *programme* being a business programme rather than on the *key* naming a school. Since the corpus files MBA dossiers under the parent short name (`Michigan`, not `Ross`), it described the dossier wrongly — a small lie on a credit surface. | **Fixed** — the clause now requires the matched key to name a school. |
+| E8 | **The customer-leak detector false-positived on `publisher: 'Dartmouth'`.** A university press office is a legitimate source, so a publisher name can equal the institution name — which appears on customer surfaces perfectly legitimately. The detector reported `1 LEAKING` on every Dartmouth file. Left in, it would have trained a reader to ignore a red banner, which is worse than not having the check. | **Fixed** — needles that are substrings of the file's own university/programme are excluded. URLs, source headlines, details, corpus ids and synthesis lines are unaffected; none of them is a substring of a university name. |
+| E9 | **`Georgia Tech` does not token-match `Georgia Institute of Technology`** — `Tech` and `Technology` are different tokens. Harmless today because the corpus files it as `Georgia Tech`, but it is a real limit of structural matching. | Open, documented in the guard table. **File dossiers under the short key the seed uses.** |
+| E10 | **A full page reload resets the clock offset.** `_offsetHours` is a module global in `lib/clock.ts`, so a browser reload silently returns to +0h. Verifying the re-crawl therefore requires **client-side** navigation (in-app links/tabs); a `location.assign` between advancing the clock and opening the file will make the re-crawl appear not to fire. Cost a false negative during verification. | Open, inherent to the design. **Demo the clock and the brief without reloading.** |
 
 ### Phase F — surfacing, verification, docs
 
