@@ -81,6 +81,36 @@ function enforceStagger(durations: number[]): number[] {
 /** Status lines for a lane, revealed in sequence. Deliberately concrete — "Reading
  *  page 1 of 2" tells a reviewer more than "Processing…". */
 const STEPS: Record<AgentId, string[]> = {
+  fresh_assessment: [
+    'Taking the file without the sales view',
+    'Reading the parties and the ask',
+    'Reading what has actually been verified',
+    'Forming a position',
+  ],
+  geography_cohort: [
+    'Finding files from this location',
+    'Reading how they closed',
+    'Weighing how much evidence that is',
+    'Recording the pattern',
+  ],
+  college_cohort: [
+    'Finding files for this institution',
+    'Narrowing to this programme',
+    'Reading how they closed',
+    'Recording the pattern',
+  ],
+  policy_fit: [
+    'Loading the lender’s parameters',
+    'Reading this file’s own figures',
+    'Testing each parameter against them',
+    'Listing what sits outside policy',
+  ],
+  credit_guardrail: [
+    'Running the assessment as given',
+    'Running it again with the sales view removed',
+    'Comparing the two',
+    'Checking nothing was written back',
+  ],
   minimum_data: [
     'Finding files like this one',
     'Reading what they had when a decision was reached',

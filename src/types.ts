@@ -563,6 +563,21 @@ export interface OnboardingVerdict {
   overrideReason?: string
 }
 
+// ---- Credit assessment (§V3) ------------------------------------------------
+/** What the credit orchestrator concluded — a POSITION for the officer who
+ *  decides, never a decision. `finalDecision` and `countersign` remain the only
+ *  writes to `app.decision`, guarded by DoA band and maker-checker. */
+export interface CreditAssessment {
+  position: string
+  outsidePolicy: number
+  headlines: { agent: string; headline: string }[]
+  /** The guardrail's verdict: did the assessment stay independent of whatever
+   *  the onboarding orchestrator concluded? Recorded on the file because a
+   *  reviewer should not have to take it on trust. */
+  independent: boolean
+  assessedAt: string
+}
+
 // ---- Generated papers (§Phase D) -------------------------------------------
 // The checklist `documents` are rows we COLLECT. These are artifacts we
 // PRODUCE. Conflating the two would put a paper the bank wrote onto the
@@ -671,6 +686,8 @@ export interface Application {
   /** §V3 — the onboarding orchestrator's readiness verdict. This is the one
    *  thing the S05 gate reads. Optional like every other v5+ addition. */
   onboardingVerdict?: OnboardingVerdict
+  /** §V3 — the credit orchestrator's position. Optional, like every v5+ field. */
+  creditAssessment?: CreditAssessment
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'
@@ -841,6 +858,7 @@ export type App360Tab =
   | 'validations'
   | 'decision'
   | 'onboarding'
+  | 'credit'
   | 'papers'
   | 'covenants'
   | 'tranches'

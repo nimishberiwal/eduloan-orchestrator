@@ -23,6 +23,89 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.3.0] — 2026-08-18
+
+**V3 Phase 3 — the credit decisioning orchestrator.** Five agents that assess a
+file from its own facts, with the sales side's conclusions structurally removed.
+Completes the two-orchestrator split.
+
+### Added — `src/lib/agents/credit.ts`
+
+- **Fresh assessment** — reads the file from parties, validations, documents and
+  extracted figures. Produces a *position*, never a recommendation:
+  `finalDecision` and `countersign` remain the only writes to `app.decision`,
+  guarded by DoA band and maker-checker.
+- **Geography history** — branch, city and region cohorts, narrowest basis that
+  has evidence behind it.
+- **College and course history** — university, university+programme and
+  programme cohorts via `peersOf`.
+- **Policy fit** — the **first officer-side computation of policy** in this
+  codebase. `eligibility.ts:quote()` runs only in the customer pre-qualification
+  journey; a bank-side file's tier, overlay, FOIR and LTV are seed literals or
+  extracted fields, never computed.
+- **Independence check** — the guardrail.
+
+Every cohort rate carries `adequate | thin | absent` evidence and is quoted
+against the book's own rate, so "80% adverse" can be read against a book that
+also runs at 81%. Below three closed comparables no rate is emitted at all.
+
+### Eight policy parameters get their first reader
+
+`coaTolerancePct`, `netAskGapPct`, `lrsCapUsd`, `incomeConvergenceGapPct`,
+`itrMatchTolerancePct`, `forexBandPct` and the FD/LIC/MF rows of `ltvPolicy`
+were declared in POLICY and read by no code at all — their thresholds existed
+only as prose inside validation messages. A number in a message is
+documentation; a number a test reads is policy.
+
+Nothing is hard-coded to a loan type. Each test states the parameter, the file's
+actual figure and whether it sits inside — and reports **unassessable** where
+the file does not carry the figure, rather than assuming a pass. Absence is not
+compliance.
+
+### Independence, enforced and proven
+
+`fresh_assessment` receives a `CreditView` — the application with
+`onboardingVerdict` removed. It cannot be influenced by what sales concluded
+because it cannot see it. The guardrail runs the whole assessment twice, once
+with the verdict present and once without, and requires **byte-identical**
+output. It also asserts no agent mutated the record it was reading.
+
+### Fixed — before shipping, a guardrail that proved nothing
+
+The first version of `assessmentFingerprint` called `creditView()` internally,
+so **both sides of the independence comparison had the verdict stripped**. It
+was comparing two identical inputs and passed on every file — including one
+deliberately rigged to leak.
+
+Caught by a negative control: an agent was temporarily patched to read the
+verdict, and the guardrail did not notice. The fingerprint now passes the
+application through unstripped, so an agent reaching around the type shows up as
+a difference. Re-run against the same rigged agent, it catches **32 of 40**
+files. A guardrail that cannot fail is not a guardrail.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Negative control — rigged leaking agent | **caught on 32/40 files** |
+| Real code, all 214 files with a verdict attached | 0 breaches · 0 not-independent · 0 write-backs · 0 non-deterministic |
+| Live | assessment recorded, audited, five lanes render with the independence chip |
+| `tsc` · `build` · standalone · vocabulary scan | clean · clean · 0.94 MB · `leaks: []` |
+
+### Known / open
+
+- The assessment runs on demand from the console; it is not triggered on entry
+  to S06, so a stale position is possible.
+- Geography learns on the **servicing branch**, not applicant residence — the
+  only geography the record carries. CJ-08 now stores the applicant's city and
+  PIN, but no closed file has one yet, so there is nothing to learn from on that
+  basis. The agent states its basis rather than substituting one quietly.
+- Cohorts remain small: many read `thin`, and `college_cohort` frequently
+  returns "no institution history to read". That is the honest answer for a
+  214-file book across 30 universities.
+
+---
+
 ## [2.2.0] — 2026-08-18
 
 **V3 Phase 2 — the customer onboarding orchestrator.** The first swarm that owns

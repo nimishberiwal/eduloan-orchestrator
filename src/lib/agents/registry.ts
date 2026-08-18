@@ -137,6 +137,48 @@ export const AGENTS: AgentDef[] = [
     internal: true,
   },
 
+  // --- the credit decisioning orchestrator (§V3) ----------------------------
+  {
+    id: 'fresh_assessment',
+    name: 'Fresh assessment',
+    what: 'Reads the file from raw data, with nothing the sales side concluded',
+    swarm: 'credit',
+    weight: 1.7,
+    internal: true,
+  },
+  {
+    id: 'geography_cohort',
+    name: 'Geography history',
+    what: 'How files from this location have fared with this lender',
+    swarm: 'credit',
+    weight: 1.35,
+    internal: true,
+  },
+  {
+    id: 'college_cohort',
+    name: 'College and course history',
+    what: 'How files for this institution and programme have fared',
+    swarm: 'credit',
+    weight: 1.5,
+    internal: true,
+  },
+  {
+    id: 'policy_fit',
+    name: 'Policy fit',
+    what: 'Applies the lender’s parameters against this file’s own facts',
+    swarm: 'credit',
+    weight: 1.9,
+    internal: true,
+  },
+  {
+    id: 'credit_guardrail',
+    name: 'Independence check',
+    what: 'Proves the assessment did not read anything the sales side concluded',
+    swarm: 'credit',
+    weight: 1.1,
+    internal: true,
+  },
+
   // --- standalone ----------------------------------------------------------
   {
     id: 'university_intel',

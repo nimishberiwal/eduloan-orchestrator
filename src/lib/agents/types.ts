@@ -34,8 +34,14 @@ export type AgentId =
   | 'co_applicant_fit'
   | 'decision_sufficiency'
   | 'onboarding_guardrail'
+  // --- the credit decisioning orchestrator (§V3) ---
+  | 'fresh_assessment'
+  | 'geography_cohort'
+  | 'college_cohort'
+  | 'policy_fit'
+  | 'credit_guardrail'
 
-export type SwarmKind = 'document' | 'sanction' | 'university' | 'onboarding'
+export type SwarmKind = 'document' | 'sanction' | 'university' | 'onboarding' | 'credit'
 
 export type LaneStatus = 'queued' | 'running' | 'done' | 'failed'
 

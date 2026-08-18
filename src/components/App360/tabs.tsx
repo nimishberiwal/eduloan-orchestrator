@@ -674,6 +674,75 @@ export function CommsTab({ app }: { app: Application }) {
   return <CommThread app={app} />
 }
 
+// ---- Credit assessment — the credit orchestrator (§V3) ----------------------
+export function CreditTab({ app }: { app: Application }) {
+  const assess = useStore((s) => s.assessCredit)
+  const a = app.creditAssessment
+
+  if (!a) {
+    return (
+      <div className="rounded-xl border border-[var(--line)] bg-white p-4 shadow-card">
+        <div className="text-13 text-slate-600">
+          Five agents read this file from its own facts, with the onboarding orchestrator’s
+          conclusions removed. They assemble a position; they do not decide — the decision stays
+          with an officer at the right DoA band.
+        </div>
+        <button
+          className="mt-3 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-12 font-semibold text-white"
+          onClick={() => assess(app.appId, { kind: 'system', sessionId: 'SYS' })}
+        >
+          Run the assessment
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-700">{a.position}</span>
+          <Chip tone={a.outsidePolicy === 0 ? 'green' : 'amber'}>
+            {a.outsidePolicy === 0 ? 'inside policy' : `${a.outsidePolicy} outside policy`}
+          </Chip>
+          {/* The independence claim is recorded ON THE FILE, so a reviewer does
+              not have to take the architecture on trust. */}
+          <Chip tone={a.independent ? 'green' : 'red'}>
+            {a.independent ? 'independent of the sales view' : 'INDEPENDENCE BREACH'}
+          </Chip>
+          <span className="ml-auto text-11 text-slate-400">assessed {fmtDateTime(a.assessedAt)}</span>
+        </div>
+        <div className="mt-2 text-11 italic text-slate-500">
+          A position, not a recommendation. The decision remains with an officer at the DoA band.
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+          What the five agents found
+        </div>
+        <div className="space-y-1">
+          {a.headlines.map((h) => (
+            <div key={h.agent} className="flex items-start gap-2 text-12">
+              <span className="w-44 shrink-0 font-medium text-slate-500">
+                {AGENT_BY_ID[h.agent as keyof typeof AGENT_BY_ID]?.name ?? h.agent}
+              </span>
+              <span className="text-slate-700">{h.headline}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button
+        className="rounded-lg border border-[var(--line)] px-2.5 py-1 text-12 font-semibold text-slate-600 hover:bg-slate-50"
+        onClick={() => assess(app.appId, { kind: 'system', sessionId: 'SYS' })}
+      >
+        Re-assess
+      </button>
+    </div>
+  )
+}
+
 // ---- Readiness — the onboarding orchestrator (§V3) --------------------------
 export function OnboardingTab({ app }: { app: Application }) {
   const assess = useStore((s) => s.assessOnboarding)

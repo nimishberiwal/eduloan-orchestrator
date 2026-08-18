@@ -36,6 +36,7 @@ import { runJourneyResets } from '@/journeys/resetRegistry'
 import { gatesFor, mergeFields, verifyDeclared } from '@/lib/declared'
 import { docsFromRun, draftsFromRun, runSanctionSwarm } from '@/lib/agents/sanction'
 import { runOnboardingSwarm, verdictFrom } from '@/lib/agents/onboarding'
+import { runCreditSwarm, summariseCredit } from '@/lib/agents/credit'
 import { POLICY } from '@/data/policy'
 import type { AgentResults } from '@/lib/agents/types'
 import type { FraudOutput, ValidationOutput } from '@/lib/agents/documents'
@@ -269,6 +270,9 @@ interface Actions {
    *  written onto the verdict itself so the file carries its own record of
    *  having been pushed through. */
   overrideOnboarding: (appId: string, reason: string) => void
+  /** §V3 — run the credit orchestrator over a file and record its position.
+   *  Does NOT decide: `finalDecision` remains the only write to `app.decision`. */
+  assessCredit: (appId: string, actor: JourneyActor) => void
   /** §Phase D item 5 — an officer approves one outreach draft, which sends it.
    *  Nothing the outreach agent writes leaves the bank without this call. */
   approveOutreachDraft: (appId: string, commId: string) => void
@@ -1595,6 +1599,24 @@ export const useStore = create<State & Actions>((set, get) => ({
       return true
     })
     pushToast('info', 'Override recorded. The file can now move to credit.')
+  },
+
+  assessCredit: (appId, actor) => {
+    const book = get().applications
+    mutate(set, appId, (app) => {
+      const results = runCreditSwarm(app, book)
+      const sum = summariseCredit(results)
+      app.creditAssessment = { ...sum, assessedAt: nowIso() }
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        // The verb never claims a decision. This orchestrator assembles a
+        // position; a person with a DoA band decides.
+        verb: sum.independent ? 'CREDIT ASSESSED' : 'CREDIT ASSESSED — INDEPENDENCE BREACH',
+        remarks: `${sum.position} · ${sum.outsidePolicy} parameter(s) outside policy`,
+      })
+      return true
+    })
   },
 
   approveOutreachDraft: (appId, commId) => {
