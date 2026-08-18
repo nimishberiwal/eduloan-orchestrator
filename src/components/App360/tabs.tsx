@@ -674,7 +674,7 @@ export function CommsTab({ app }: { app: Application }) {
   return <CommThread app={app} />
 }
 
-// ---- Credit assessment — the credit orchestrator (§V3) ----------------------
+// ---- Credit assessment — the credit orchestrator (§v5) ----------------------
 export function CreditTab({ app }: { app: Application }) {
   const assess = useStore((s) => s.assessCredit)
   const a = app.creditAssessment
@@ -743,7 +743,7 @@ export function CreditTab({ app }: { app: Application }) {
   )
 }
 
-// ---- Readiness — the onboarding orchestrator (§V3) --------------------------
+// ---- Readiness — the onboarding orchestrator (§v5) --------------------------
 export function OnboardingTab({ app }: { app: Application }) {
   const assess = useStore((s) => s.assessOnboarding)
   const override = useStore((s) => s.overrideOnboarding)

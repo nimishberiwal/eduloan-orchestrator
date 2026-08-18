@@ -1,5 +1,5 @@
 // ============================================================================
-// The credit decisioning orchestrator (§V3) — five agents in parallel.
+// The credit decisioning orchestrator (§v5) — five agents in parallel.
 //
 // This is the second half of the handover. The onboarding orchestrator decides
 // whether a file is complete enough to leave collection; this one assesses it,

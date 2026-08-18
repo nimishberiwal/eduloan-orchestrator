@@ -29,12 +29,12 @@ export type AgentId =
   | 'outreach'
   // --- standalone (§E) ---
   | 'university_intel'
-  // --- the onboarding orchestrator (§V3) ---
+  // --- the onboarding orchestrator (§v5) ---
   | 'minimum_data'
   | 'co_applicant_fit'
   | 'decision_sufficiency'
   | 'onboarding_guardrail'
-  // --- the credit decisioning orchestrator (§V3) ---
+  // --- the credit decisioning orchestrator (§v5) ---
   | 'fresh_assessment'
   | 'geography_cohort'
   | 'college_cohort'

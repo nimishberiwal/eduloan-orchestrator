@@ -544,7 +544,7 @@ export interface DocumentAgentCheck {
   blocking: boolean
 }
 
-// ---- Onboarding readiness (§V3) --------------------------------------------
+// ---- Onboarding readiness (§v5) --------------------------------------------
 /** Whether a file is complete enough to leave collection and reach Credit.
  *
  *  `ready: false` holds the S05 → S06 exit. The gate is deliberately
@@ -563,7 +563,7 @@ export interface OnboardingVerdict {
   overrideReason?: string
 }
 
-// ---- Credit assessment (§V3) ------------------------------------------------
+// ---- Credit assessment (§v5) ------------------------------------------------
 /** What the credit orchestrator concluded — a POSITION for the officer who
  *  decides, never a decision. `finalDecision` and `countersign` remain the only
  *  writes to `app.decision`, guarded by DoA band and maker-checker. */
@@ -683,10 +683,10 @@ export interface Application {
   /** §Phase F — what the document swarm found, per document. Optional, so the
    *  14 seed literals compile untouched. */
   agentChecks?: DocumentAgentCheck[]
-  /** §V3 — the onboarding orchestrator's readiness verdict. This is the one
+  /** §v5 — the onboarding orchestrator's readiness verdict. This is the one
    *  thing the S05 gate reads. Optional like every other v5+ addition. */
   onboardingVerdict?: OnboardingVerdict
-  /** §V3 — the credit orchestrator's position. Optional, like every v5+ field. */
+  /** §v5 — the credit orchestrator's position. Optional, like every v5+ field. */
   creditAssessment?: CreditAssessment
 }
 
@@ -827,7 +827,7 @@ export interface AutomationEvent {
 }
 
 // ---- Closure forensics (§v2 req 8) -----------------------------------------
-/** `disbursed` is §V3. Without a positive class every cohort rate a learning
+/** `disbursed` is §v5. Without a positive class every cohort rate a learning
  *  agent can compute is a rejection rate — "12% of Pune files failed" with no
  *  way to say what the other 88% did, because DISBURSED_ACTIVE carried no
  *  Outcome record at all. A closure is a closure whether or not it went well. */

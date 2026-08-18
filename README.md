@@ -22,21 +22,28 @@ trail naming who did what.**
 
 ## Two bodies of work — V1 and V2
 
-This prototype was built in two distinct commissions, and they are not the same
-kind of thing. **Read [docs/VERSIONS.md](docs/VERSIONS.md) first** — it is the
-short version of what each one is and how to tell them apart in the code.
+This prototype was built in two commissions, and they are not the same kind of
+thing. **Read [docs/VERSIONS.md](docs/VERSIONS.md) first** — it is the short
+version of what each one is and how to tell them apart in the code.
 
-| | What it is | Shipped |
+| | What it is | Tags |
 |---|---|---|
 | **V1** | The origination **journeys** — the surfaces people touch | `v1.0.0` |
-| **V2** | **Agentic origination** — parallel agents on every upload, self-declared data with a disbursement gate, and a generated sanction pack | `v1.1.0` (item 6) + `v2.0.0` (items 1–5) |
+| **V2** | **Agentic origination** — parallel agents on every upload, self-declared data with a disbursement gate, a generated sanction pack, university intelligence, and two **orchestrators** that own a phase and can stop a file | `v1.1.0` → `v2.3.0` |
 
-Two traps worth knowing before you read any comment in `src/`:
+V2 arrived in two waves: agents that *assist* (items 1–6), then two
+orchestrators that *own* — a customer onboarding agent gating the S05 → S06
+handover, and a credit decisioning agent that reassesses with the sales view
+structurally removed.
 
+Three traps worth knowing before you read any comment in `src/`:
+
+- **There is no V3.** Some changelog entries say "V3 Phase 2/3" — that was a
+  working label. All of it is V2.
 - **"V2" is a body of work, not a version number.** Its sixth development
   shipped early, inside `v1.1.0`.
 - **`§v2` and `§v3` in comments are the *console's* history**, not this split.
-  V1 is marked `§v4`; V2 is marked `§v5` and `§Phase A`–`§Phase E`.
+  V1 is `§v4`; V2 is `§v5`.
 
 The V2 build record, including the sixteen defects found while building it, is
 in [docs/V2-BUILD-NOTES.md](docs/V2-BUILD-NOTES.md).
@@ -48,7 +55,8 @@ npm install
 npm run dev      # Vite dev server — journeys at /, dashboard at /console
 npm run build    # typecheck + production build
 
-node scripts/build-standalone.mjs   # → one self-contained 0.74 MB HTML file
+node scripts/build-standalone.mjs   # → one self-contained ~0.94 MB HTML file
+node scripts/scan-vocabulary.mjs    # → customer surfaces must report `leaks: []`
 ```
 
 The dashboard is desktop-first (1440px reference); the journeys are mobile-first
@@ -94,7 +102,10 @@ component states throughout.
 - **4 views**: Pipeline (Kanban) · Queues · Application 360 (10-tab strip) ·
   Analytics (computed live).
 
-## v2 — reviewer feedback build
+## Console v2 — reviewer feedback build
+
+> **Console versioning, not the V1/V2 split above.** This wave predates V1 and
+> is what `§v2` marks in the source.
 
 | # | Feedback | Where it lives |
 |---|---|---|
@@ -123,8 +134,9 @@ procedurally generated across 8 branches). The generator is deterministic, so
   round-robin auto-assign on forward-move.
 - **Application 360** — header band (customer-facing mirror), role-filtered
   action bar, parallel-lane timeline, and the tabs: Documents · Extracted data ·
-  Validations · Decision (CAM-lite) · Covenants · Tranches · Comms ·
-  Integrations · Audit · Notes.
+  Validations · Readiness · Credit assessment · Decision (CAM-lite) ·
+  Sanction pack · Covenants · Tranches · Comms · Integrations ·
+  University brief · Consents · Peers · Audit · Notes.
 - **Analytics** — funnel + drop-off, TAT median/p90, approval rate, rejection
   Pareto, blocker split, aging RAG, DoA depth, deviations, sanction-expiry risk,
   channel conversion.
@@ -135,7 +147,7 @@ production orchestrator can lift it unchanged.
 
 ---
 
-## v4 — Glib.money origination journeys
+## V1 (`§v4`) — Glib.money origination journeys
 
 Four customer-facing surfaces in front of the dashboard, feeding the same store.
 **Glib.money** is the platform brand; **Horizon Bank** is the lender and appears
@@ -172,3 +184,44 @@ inspector, which goes red if isolation or the headline reconciliation ever
 breaks) and the **persona switch** top-right, which jumps between Student /
 Parent / Security owner / RM / Back office on the same application and carries
 the tray of every invite and handoff link the prototype would have sent by SMS.
+
+---
+
+## V2 (`§v5`) — agentic origination
+
+Everything above is V1 and the console. This is the second commission, and it
+arrived in two waves.
+
+**Wave 1 — agents that assist.** Every document upload runs three agents in
+parallel (extraction · fraud · validation) on both the detail screens and the
+ordinary checklist. Typed values that skipped their upload become *self-declared*
+and are chased at CJ-28, gated so no money moves until they are evidenced.
+Countersign produces a six-paper sanction pack by seven parallel agents, with
+outreach drafted and never sent until an officer approves it. And a researched
+university-intelligence corpus of 45 dossiers with sourced findings.
+
+**Wave 2 — orchestrators that own a phase.** Two agents that can stop a file:
+
+- **Customer onboarding** — four sub-agents deciding whether an application is
+  complete enough to leave collection, holding the **S05 → S06** exit until it
+  is. An officer override is audited and does *not* rewrite the verdict.
+- **Credit decisioning** — five sub-agents reassessing from raw data with the
+  onboarding verdict structurally removed.
+
+Three things this build holds hard, each enforced by a guardrail agent that can
+actually fail:
+
+- **Timing is theatre; results are deterministic.** Findings are a pure function
+  of their inputs, computed completely up front. Only the reveal is on a timer,
+  which is why `/__dev/agents` can prove it by running a swarm twice and diffing.
+- **Sufficiency is not approvability.** The onboarding agent judging whether a
+  file is *decidable* is handed a view with the decision stripped out, and is
+  tested against the same file with the decision forced both ways — the outputs
+  must be byte-identical.
+- **Credit inherits nothing from sales.** The assessment is run with and without
+  the onboarding verdict attached and must be byte-identical. That test is itself
+  checked with a negative control that deliberately leaks, because a guardrail
+  that cannot fail is not a guardrail.
+
+`/__dev/agents` is the reviewable surface: determinism, lane parallelism,
+customer-leak assertions and the corpus-resolution guard table.

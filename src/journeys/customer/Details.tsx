@@ -94,7 +94,7 @@ export function Profile({ app }: { app: Application }) {
       { key: 'name', label: 'Full name', value: name, fromKey: 'name' },
       { key: 'dob', label: 'Date of birth', value: printedFromIso(dob), fromKey: 'dob' },
       { key: 'pan', label: 'PAN', value: pan.toUpperCase(), fromKey: 'pan' },
-      // §V3 — the applicant's own city and PIN, which this screen has always
+      // §v5 — the applicant's own city and PIN, which this screen has always
       // collected and always thrown away: they went into the milestone remark
       // and nowhere else. The only geography on the data model is the SERVICING
       // BRANCH, so a cohort agent asked about "where applicants come from" can

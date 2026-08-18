@@ -100,7 +100,7 @@ export const AGENTS: AgentDef[] = [
     weight: 1.3,
   },
 
-  // --- the onboarding orchestrator (§V3) ------------------------------------
+  // --- the onboarding orchestrator (§v5) ------------------------------------
   // All four are `internal`. This orchestrator is bank work: it decides whether
   // a file is ready to leave collection, which is not a question the customer
   // is being asked. They see tasks, never a readiness score.
@@ -137,7 +137,7 @@ export const AGENTS: AgentDef[] = [
     internal: true,
   },
 
-  // --- the credit decisioning orchestrator (§V3) ----------------------------
+  // --- the credit decisioning orchestrator (§v5) ----------------------------
   {
     id: 'fresh_assessment',
     name: 'Fresh assessment',

@@ -84,7 +84,7 @@ export function evaluateGate(app: Application): GateEvaluation | null {
     }
   }
 
-  // S05 → S06: the onboarding orchestrator's readiness verdict (§V3).
+  // S05 → S06: the onboarding orchestrator's readiness verdict (§v5).
   //
   // This is the handover. `defaultDeptForStage` reassigns the file from Ops to
   // Credit at S06, so S05's exit is the moment collection ends and assessment

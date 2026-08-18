@@ -23,6 +23,51 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.3.1] — 2026-08-18
+
+Documentation and marker reconciliation. **No behaviour change** — comments,
+docs and one heading rename only.
+
+### Why
+
+The orchestrator work was drafted under a working **"V3"** label. It is not a
+third body of work: it is V2's second wave. The entries for `2.1.0`–`2.3.0`
+below still read *"V3 groundwork"*, *"V3 Phase 2"* and *"V3 Phase 3"*; those are
+published in GitHub Releases and are **left as written** rather than rewritten,
+per `RELEASING.md` §5.
+
+### Fixed — a marker collision I introduced
+
+`docs/VERSIONS.md` warns that `§v2` and `§v3` in the source are the **console's**
+own history and have nothing to do with the V1/V2 split. The orchestrator work
+was then marked **`§V3`** — differing from the console's `§v3` only by case, and
+landing in `src/components/App360/tabs.tsx`, a file that already contained four
+of them. Exactly the misreading the document exists to prevent.
+
+All 20 occurrences across 11 files are now **`§v5`**, the established marker for
+V2 agent work. `grep -rc '§V3' src/` returns nothing.
+
+### Changed
+
+- **`docs/VERSIONS.md` rewritten** as the definitive V1/V2 demarcation. V2 now
+  covers both waves: the six assisting developments *and* the two orchestrators.
+  Adds the release history end to end, the two anti-goal properties with how
+  each is enforced and proven, and the full table of optional fields V2 added to
+  V1 types.
+- **README** gains a V2 section to sit alongside V1, and two headings are
+  disambiguated: `## v2 — reviewer feedback build` becomes **`## Console v2`**
+  with a note that it predates the split, and `## v4` becomes **`## V1 (§v4)`**.
+  Both previously contradicted the summary two screens above them.
+- Two stale README figures corrected: the standalone build is ~0.94 MB, not
+  0.74 MB, and App-360 now has 15 tabs rather than the 10 listed.
+
+### Verified
+
+`tsc --noEmit` · `npm run build` · standalone 0.94 MB · `scan-vocabulary`
+`leaks: []` · every document cross-link resolves · no `§V3` remaining.
+
+---
+
 ## [2.3.0] — 2026-08-18
 
 **V3 Phase 3 — the credit decisioning orchestrator.** Five agents that assess a

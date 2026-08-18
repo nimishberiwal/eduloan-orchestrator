@@ -262,15 +262,15 @@ interface Actions {
     results: AgentResults,
     actor: JourneyActor,
   ) => void
-  /** §V3 — run the onboarding orchestrator over a file and record its verdict.
+  /** §v5 — run the onboarding orchestrator over a file and record its verdict.
    *  The verdict is what the S05 gate reads, so this is the verb that decides
    *  whether a file can be handed to Credit. */
   assessOnboarding: (appId: string, actor: JourneyActor) => void
-  /** §V3 — proceed past a `ready: false` verdict. Audited, and the override is
+  /** §v5 — proceed past a `ready: false` verdict. Audited, and the override is
    *  written onto the verdict itself so the file carries its own record of
    *  having been pushed through. */
   overrideOnboarding: (appId: string, reason: string) => void
-  /** §V3 — run the credit orchestrator over a file and record its position.
+  /** §v5 — run the credit orchestrator over a file and record its position.
    *  Does NOT decide: `finalDecision` remains the only write to `app.decision`. */
   assessCredit: (appId: string, actor: JourneyActor) => void
   /** §Phase D item 5 — an officer approves one outreach draft, which sends it.

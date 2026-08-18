@@ -169,7 +169,7 @@ const INTAKES: readonly (readonly [Intake, number])[] = [
   ['Fall-2026', 72], ['Spring-2026', 16], ['Fall-2027', 12],
 ]
 
-// ---- Why a file closed (§V3) ----------------------------------------------
+// ---- Why a file closed (§v5) ----------------------------------------------
 //
 // This table exists because the closure reason used to be `rng.pick(REJ_CODES)`
 // — drawn independently of the ask, the university, the bureau score, the FOIR

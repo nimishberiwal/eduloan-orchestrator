@@ -1,5 +1,5 @@
 // ============================================================================
-// The customer onboarding orchestrator (§V3) — four agents in parallel.
+// The customer onboarding orchestrator (§v5) — four agents in parallel.
 //
 // This is the first swarm that OWNS a phase rather than assisting one. Its only
 // job is to get an application complete enough to hand to credit, and it gates
