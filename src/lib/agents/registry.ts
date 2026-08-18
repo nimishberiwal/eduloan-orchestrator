@@ -179,6 +179,51 @@ export const AGENTS: AgentDef[] = [
     internal: true,
   },
 
+  // --- the disbursement gating orchestrator (§v5) ---------------------------
+  // All five are `internal`. The customer REQUESTS a tranche and is told it is
+  // queued; they are never shown the reasons money is being held, because two
+  // of those reasons are statutory limits they cannot act on.
+  {
+    id: 'lrs_aggregate',
+    name: 'LRS headroom',
+    what: 'Adds every remittance on the file together and checks the year\u2019s cap',
+    swarm: 'disbursement',
+    weight: 1.6,
+    internal: true,
+  },
+  {
+    id: 'fema_compliance',
+    name: 'FEMA paperwork',
+    what: 'Form A2 and the FEMA declaration, the stated purpose and who is being paid',
+    swarm: 'disbursement',
+    weight: 1.2,
+    internal: true,
+  },
+  {
+    id: 'visa_gating',
+    name: 'Visa sequencing',
+    what: 'Whether the visa is endorsed, and which tranches that releases',
+    swarm: 'disbursement',
+    weight: 1.35,
+    internal: true,
+  },
+  {
+    id: 'fx_band',
+    name: 'Rate check',
+    what: 'The rate used against the reference rate, and the rupee figure it produces',
+    swarm: 'disbursement',
+    weight: 1.1,
+    internal: true,
+  },
+  {
+    id: 'disbursement_guardrail',
+    name: 'Release check',
+    what: 'Checks the other four only measured, and could not have moved money',
+    swarm: 'disbursement',
+    weight: 1,
+    internal: true,
+  },
+
   // --- standalone ----------------------------------------------------------
   {
     id: 'university_intel',

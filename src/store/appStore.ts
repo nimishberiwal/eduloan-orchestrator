@@ -37,6 +37,12 @@ import { gatesFor, mergeFields, verifyDeclared } from '@/lib/declared'
 import { docsFromRun, draftsFromRun, runSanctionSwarm } from '@/lib/agents/sanction'
 import { runOnboardingSwarm, verdictFrom } from '@/lib/agents/onboarding'
 import { runCreditSwarm, summariseCredit } from '@/lib/agents/credit'
+import {
+  disbursementVerdictFrom,
+  isOverridable,
+  releasability,
+  runDisbursementSwarm,
+} from '@/lib/agents/disbursement'
 import { POLICY } from '@/data/policy'
 import type { AgentResults } from '@/lib/agents/types'
 import type { FraudOutput, ValidationOutput } from '@/lib/agents/documents'
@@ -273,6 +279,13 @@ interface Actions {
   /** §v5 — run the credit orchestrator over a file and record its position.
    *  Does NOT decide: `finalDecision` remains the only write to `app.decision`. */
   assessCredit: (appId: string, actor: JourneyActor) => void
+  /** §v5 — run the disbursement orchestrator over a file's tranche schedule.
+   *  Does NOT release: `releaseTranche`/`countersignTranche` under maker-checker
+   *  remain the only path to money. */
+  assessDisbursement: (appId: string, actor: JourneyActor) => void
+  /** §v5 — proceed past ONE overridable tranche gate. Refuses outright on a
+   *  statutory gate; there is no officer discretion over a FEMA limit. */
+  overrideTrancheGate: (appId: string, trancheId: string, ref: string, reason: string) => void
   /** §Phase D item 5 — an officer approves one outreach draft, which sends it.
    *  Nothing the outreach agent writes leaves the bank without this call. */
   approveOutreachDraft: (appId: string, commId: string) => void
@@ -1311,6 +1324,20 @@ export const useStore = create<State & Actions>((set, get) => ({
         pushToast('error', `Tranche ${t.n} has failing gates — cannot release.`)
         return false
       }
+      // §v5 — the disbursement orchestrator's COMPUTED gates, recomputed here
+      // rather than read off the stored verdict. Overrides are honoured;
+      // statutory blocks are not overridable and so cannot have been cleared.
+      const r = releasability(app, trancheId)
+      if (!r.ok) {
+        const statutory = r.statutory.length > 0
+        pushToast(
+          'error',
+          statutory
+            ? `Tranche ${t.n} is held by ${r.statutory.map((g) => g.ref).join(', ')} — statutory, cannot be overridden.`
+            : `Tranche ${t.n} held by ${r.blocking.map((g) => g.ref).join(', ')}. Override on the Tranches tab to proceed.`,
+        )
+        return false
+      }
       t.pendingChecker = true
       t.maker = officerOf(role)
       t.status = 'scheduled'
@@ -1617,6 +1644,78 @@ export const useStore = create<State & Actions>((set, get) => ({
       })
       return true
     })
+  },
+
+  assessDisbursement: (appId, actor) => {
+    mutate(set, appId, (app) => {
+      const results = runDisbursementSwarm(app)
+      const v = disbursementVerdictFrom(app, results)
+      app.disbursementVerdict = {
+        ...v,
+        assessedAt: nowIso(),
+        // Overrides SURVIVE a re-run. They are human acts with a timestamp and
+        // a reason; re-running the agents must not silently erase one.
+        overrides: app.disbursementVerdict?.overrides ?? [],
+      }
+      const held = v.tranches.filter((t) => !t.releasable).length
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        verb: held === 0 ? 'DISBURSEMENT GATES CLEAR' : 'DISBURSEMENT GATES HELD',
+        remarks:
+          held === 0
+            ? `${v.tranches.length} tranche(s) releasable · USD ${v.lrsHeadroomUsd.toLocaleString('en-US')} LRS headroom`
+            : `${held} of ${v.tranches.length} tranche(s) held${v.anyStatutoryBlock ? ' — includes a statutory block' : ''}`,
+      })
+      return true
+    })
+  },
+
+  overrideTrancheGate: (appId, trancheId, ref, reason) => {
+    const { role, pushToast } = get()
+    if (!reason.trim()) {
+      pushToast('error', 'An override needs a reason.')
+      return
+    }
+    let refused = false
+    mutate(set, appId, (app) => {
+      const t = app.tranches.find((x) => x.id === trancheId)
+      if (!t) return false
+      if (!isOverridable(app, trancheId, ref)) {
+        // A statutory gate. Refused at the verb rather than accepted and then
+        // ignored at release, so the record never carries an override that did
+        // nothing.
+        refused = true
+        return false
+      }
+      const existing = app.disbursementVerdict?.overrides ?? []
+      const overrides = [
+        ...existing.filter((o) => !(o.trancheId === trancheId && o.ref === ref)),
+        { trancheId, ref, by: officerOf(role), reason: reason.trim(), at: NOW_ISO },
+      ]
+      if (app.disbursementVerdict) {
+        app.disbursementVerdict = { ...app.disbursementVerdict, overrides }
+      } else {
+        const results = runDisbursementSwarm(app)
+        app.disbursementVerdict = {
+          ...disbursementVerdictFrom(app, results),
+          assessedAt: nowIso(),
+          overrides,
+        }
+      }
+      audit(app, {
+        actor: officerOf(role),
+        role,
+        verb: 'TRANCHE GATE OVERRIDDEN',
+        remarks: `Tranche ${t.n} · ${ref} — ${reason.trim()}`,
+      })
+      return true
+    })
+    if (refused) {
+      pushToast('error', `${ref} is a statutory gate on tranche — it cannot be overridden.`)
+    } else {
+      pushToast('success', `${ref} overridden on record.`)
+    }
   },
 
   approveOutreachDraft: (appId, commId) => {

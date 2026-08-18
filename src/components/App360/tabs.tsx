@@ -21,6 +21,7 @@ import { ambiguityReason } from '@/data/classification'
 import { briefFromRun, runUniversitySwarm } from '@/lib/agents/university'
 import { BRIEF_TTL_HOURS, briefStaleness } from '@/lib/agents/university'
 import { gatesFor } from '@/lib/declared'
+import { releasability, trancheVerdicts } from '@/lib/agents/disbursement'
 import { docToText } from '@/lib/agents/sanction'
 import { AGENT_BY_ID } from '@/lib/agents/registry'
 import { downloadText, stampedName } from '@/lib/csv'
@@ -632,7 +633,13 @@ export function TranchesTab({ app }: { app: Application }) {
         // officer must see the same gate the release check enforces, or the
         // button fails for a reason the screen never showed.
         const gates = gatesFor(app, t)
-        const gatesOk = gates.every((g) => g.passed)
+        // §v5 — the disbursement orchestrator's COMPUTED gates, alongside the
+        // seeded ones. The officer must see the same thing the release check
+        // enforces, and `releasability` is the function that check calls.
+        const r = releasability(app, t.id)
+        const overrides = app.disbursementVerdict?.overrides ?? []
+        const gatesOk = gates.every((g) => g.passed) && r.ok
+        const computed = trancheVerdicts(app).find((v) => v.trancheId === t.id)?.gates ?? []
         return (
           <div key={t.id} className="rounded-xl border border-[var(--line)] bg-white shadow-card p-3">
             <div className="flex items-center justify-between">
@@ -651,6 +658,43 @@ export function TranchesTab({ app }: { app: Application }) {
                 ))}
               </div>
             </div>
+
+            {computed.length > 0 && (
+              <div className="mt-2">
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+                  Computed from the file · disbursement agents
+                </div>
+                <div className="space-y-1">
+                  {computed.map((g) => {
+                    const ov = overrides.find((o) => o.trancheId === t.id && o.ref === g.ref)
+                    const cleared = g.passed || Boolean(ov)
+                    return (
+                      <div key={g.ref} className="flex items-start gap-2 text-[11px]">
+                        <Chip tone={cleared ? 'green' : g.severity === 'statutory' ? 'red' : 'amber'}>
+                          {cleared ? '✓' : '✗'} {g.ref}
+                        </Chip>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-slate-600">{g.label} — {g.detail}</span>
+                          {g.severity === 'statutory' && !g.passed && (
+                            <span className="ml-1 font-semibold text-red-700">
+                              Statutory — cannot be overridden.
+                            </span>
+                          )}
+                          {ov && (
+                            <span className="ml-1 text-amber-700">
+                              Overridden by {ov.by} — “{ov.reason}”
+                            </span>
+                          )}
+                        </div>
+                        {!g.passed && !ov && g.severity === 'overridable' && (
+                          <TrancheOverride appId={app.appId} trancheId={t.id} gateRef={g.ref} />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div className="mt-2 flex items-center gap-2">
               {t.status !== 'remitted' && !t.pendingChecker && roleCan(role, 'release_tranche') && (
                 <Btn size="sm" tone={gatesOk ? 'primary' : 'default'} disabled={!gatesOk} onClick={() => releaseTranche(app.appId, t.id)}>
@@ -661,6 +705,12 @@ export function TranchesTab({ app }: { app: Application }) {
                 <Btn size="sm" tone="primary" onClick={() => countersignTranche(app.appId, t.id)}>Countersign release (Credit)</Btn>
               )}
               {t.pendingChecker && <span className="text-[11px] text-indigo-600">⏳ maker {t.maker} — awaiting Credit checker</span>}
+              {!gatesOk && !t.pendingChecker && t.status !== 'remitted' && r.blocking.length > 0 && (
+                <span className="text-[11px] text-slate-500">
+                  Held by {r.blocking.map((g) => g.ref).join(', ')}
+                  {r.statutory.length > 0 ? ' — statutory' : ''}
+                </span>
+              )}
             </div>
           </div>
         )
@@ -1235,5 +1285,61 @@ function renderMentions(body: string) {
     ) : (
       <span key={i}>{p}</span>
     ),
+  )
+}
+
+/** §v5 — one override, on one gate, on one tranche.
+ *
+ *  Per gate rather than per tranche: a reason that clears a rate-band finding
+ *  says nothing about a visa, and a blanket control would let one sentence
+ *  stand as the record for two unrelated holds. Statutory gates never render
+ *  this — the store refuses them anyway, but a control that exists only to be
+ *  rejected is a worse surface than no control. */
+function TrancheOverride({
+  appId,
+  trancheId,
+  gateRef,
+}: {
+  appId: string
+  trancheId: string
+  gateRef: string
+}) {
+  const override = useStore((s) => s.overrideTrancheGate)
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  if (!open) {
+    return (
+      <button
+        className="shrink-0 rounded border border-[var(--line)] px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+        onClick={() => setOpen(true)}
+      >
+        Override
+      </button>
+    )
+  }
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <input
+        autoFocus
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder={`Why release despite ${gateRef}?`}
+        className="w-56 rounded border border-[var(--line)] px-2 py-0.5 text-[10px]"
+      />
+      <button
+        className="rounded bg-[var(--brand)] px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-40"
+        disabled={!reason.trim()}
+        onClick={() => {
+          override(appId, trancheId, gateRef, reason)
+          setOpen(false)
+          setReason('')
+        }}
+      >
+        Record
+      </button>
+      <button className="text-[10px] text-slate-500" onClick={() => setOpen(false)}>
+        cancel
+      </button>
+    </div>
   )
 }

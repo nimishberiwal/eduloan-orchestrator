@@ -15,7 +15,7 @@
 // ============================================================================
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Application, UniversityBrief } from '@/types'
+import type { Application, OnboardingVerdict, UniversityBrief } from '@/types'
 import { useStore } from '@/store/appStore'
 import { runDocumentSwarm } from '@/lib/agents/documents'
 import { findingsFor, planRun, runDuration } from '@/lib/agents/runtime'
@@ -30,6 +30,30 @@ import { customerFacingStatus } from '@/data/customerMirror'
 import { UNIVERSITY_INTEL } from '@/data/universityIntel'
 import { US_UNIVERSITIES } from '@/lib/eligibility'
 import { allFindings, nameMatchesKey, resolveIntel } from '@/lib/agents/universityCorpus'
+// §v5 — the two orchestrators. Imported for the anti-goal sections at the foot
+// of this file, which are the only place either property is asserted live.
+import {
+  runDecisionSufficiency,
+  runOnboardingSwarm,
+  sufficiencyView,
+  verdictFrom,
+  type GuardrailOutput,
+  type SufficiencyOutput,
+} from '@/lib/agents/onboarding'
+import {
+  releasability,
+  runDisbursementSwarm,
+  trancheVerdicts,
+  type DisbursementGuardrailOutput,
+  type LrsOutput,
+} from '@/lib/agents/disbursement'
+import { POLICY } from '@/data/policy'
+import {
+  runCreditGuardrail,
+  runCreditSwarm,
+  type CreditGuardrailOutput,
+  type PolicyFitOutput,
+} from '@/lib/agents/credit'
 
 const SAMPLE_FILE = 'marksheet-front.jpg'
 const SAMPLE_KB = 620
@@ -188,6 +212,15 @@ export function AgentInspector() {
         defect — the customer is told <em>“someone will take a quick look”</em>{' '}
         and never what was flagged.
       </p>
+
+      {/* §v5 — the orchestrators. Curated 14 for the per-row tables; the whole
+          book is passed separately because the cohort agents learn from the
+          population, not from the sample being displayed. */}
+      <OrchestratorSection apps={curated} book={apps} />
+
+      {/* Whole book — only ~15 files reach disbursement, and none of the
+          curated 14 but APP-2612. */}
+      <DisbursementSection book={apps} />
 
       <UniversitySection apps={curated} />
       {/* Fed from EVERY application, not the curated 14 — the point is to see
@@ -861,3 +894,530 @@ function probe(app: Application, fileName: string): Probe {
 }
 
 export { runDuration }
+
+// ============================================================================
+// The two orchestrators (§v5).
+//
+// The assisting swarms above are checked for determinism and for keeping bank
+// findings away from the customer. The orchestrators need one thing more, and
+// it is the reason they were built as an architecture change rather than five
+// more swarm functions: each carries an ANTI-GOAL — a thing it must be unable
+// to do — and an intention is not a property. These two sections run the
+// anti-goal tests on every curated file and show the result per row.
+//
+//   Onboarding must measure whether a file is DECIDABLE, never whether it would
+//   be APPROVED. Proven by forcing the decision to APPROVE and to DECLINE and
+//   requiring all three sufficiency outputs to be byte-identical.
+//
+//   Credit must assess with no influence from what sales concluded. Proven by
+//   running the assessment with and without the onboarding verdict attached and
+//   requiring byte-identical output.
+//
+// A test that cannot fail proves nothing, and this codebase has already shipped
+// one that could not (see `assessmentFingerprint`). So both sections carry a
+// NEGATIVE CONTROL: a deliberately rigged input that the test MUST reject. If a
+// control ever goes green, the test beside it has stopped meaning anything.
+// ============================================================================
+
+/** A synthetic verdict to attach to a file that has none. Seed applications
+ *  carry no `onboardingVerdict`, so an independence test run on them compares
+ *  two identical inputs — vacuously equal. Attaching one first is what gives
+ *  the test something to actually be independent OF. */
+const PROBE_VERDICT: OnboardingVerdict = {
+  ready: false,
+  blockingReasons: ['PROBE — 3 checks nobody has answered', 'PROBE — co-applicant income unevidenced'],
+  headlines: [{ agent: 'minimum_data', headline: 'PROBE HEADLINE' }],
+  assessedAt: '2026-07-20T10:00:00.000Z',
+}
+
+interface OnbProbe {
+  appId: string
+  ready: boolean
+  decidable: boolean
+  unanswered: number
+  notApplicable: number
+  deterministic: boolean
+  sufficiencyIndependent: boolean
+  noSpillover: boolean
+  noCustomerAudience: boolean
+  /** `planRun(..., { forCustomer: true })` must plan NO lanes — all four agents
+   *  are `internal`, so the customer never watches onboarding run. */
+  customerLanes: number
+  customerFindings: number
+  offences: string[]
+}
+
+function probeOnboarding(app: Application, book: Application[]): OnbProbe {
+  const results = runOnboardingSwarm(app, book)
+  const guard = results.onboarding_guardrail?.output as GuardrailOutput
+  const suff = results.decision_sufficiency?.output as SufficiencyOutput
+  const verdict = verdictFrom(results)
+  return {
+    appId: app.appId,
+    ready: verdict.ready,
+    decidable: suff.decidable,
+    unanswered: suff.unanswered.length,
+    notApplicable: suff.notApplicable.length,
+    deterministic: guard.deterministic,
+    sufficiencyIndependent: guard.sufficiencyIndependentOfOutcome,
+    noSpillover: guard.noCreditSpillover,
+    noCustomerAudience: guard.noCustomerAudience,
+    customerLanes: planRun('onboarding', app.appId, app.appId, { forCustomer: true }).tasks.length,
+    customerFindings: findingsFor(results, 'customer').length,
+    offences: guard.offences,
+  }
+}
+
+/** NEGATIVE CONTROL for "sufficiency is not approvability".
+ *
+ *  The real test compares sufficiency across a forced APPROVE / DECLINE. It can
+ *  only mean something if those two inputs are genuinely distinguishable — if
+ *  `sufficiencyView` stripped the decision AND the forcing never happened, the
+ *  comparison would be two identical objects and would pass on anything.
+ *
+ *  So: assert the UNSTRIPPED application does differ under the same forcing.
+ *  Green here means the mutation is real and the stripping is what neutralises
+ *  it. Red means the test above is vacuous. */
+function sufficiencyControlIsLive(app: Application): boolean {
+  const base = JSON.stringify({ ...app, decision: 'APPROVE' })
+  const other = JSON.stringify({ ...app, decision: 'DECLINE', rejectionCode: 'REJ-01' })
+  const stripped = JSON.stringify(sufficiencyView({ ...app, decision: 'APPROVE' }))
+  const strippedOther = JSON.stringify(
+    sufficiencyView({ ...app, decision: 'DECLINE', rejectionCode: 'REJ-01' }),
+  )
+  // The raw records differ; the views handed to 1.3 do not. That is the whole
+  // mechanism, asserted rather than assumed.
+  return base !== other && stripped === strippedOther
+}
+
+interface CredProbe {
+  appId: string
+  position: string
+  policyTests: number
+  outsidePolicy: number
+  /** Parameters the file does not carry a figure for. Absence is not
+   *  compliance, so these are reported rather than counted as passes. */
+  unassessable: number
+  deterministic: boolean
+  independent: boolean
+  noWriteBack: boolean
+  /** The verdict was attached before the guardrail ran, so the with/without
+   *  comparison had a real difference to be blind to. */
+  verdictWasAttached: boolean
+  /** NEGATIVE CONTROL — a payload that DOES read the verdict must differ. */
+  controlDetectsLeak: boolean
+  offences: string[]
+}
+
+function probeCredit(app: Application, book: Application[]): CredProbe {
+  // Attach a verdict first — see PROBE_VERDICT.
+  const withVerdict: Application = { ...app, onboardingVerdict: PROBE_VERDICT }
+  const guard = runCreditGuardrail(withVerdict, book).output as CreditGuardrailOutput
+  const results = runCreditSwarm(withVerdict, book)
+  const summary = results.fresh_assessment?.output as { position?: string } | undefined
+  const policy = results.policy_fit?.output as PolicyFitOutput | undefined
+
+  // The control: a fingerprint that deliberately INCLUDES the verdict must come
+  // out different with and without it. If even that comes out equal, the two
+  // inputs are indistinguishable and the independence test above is vacuous.
+  const leaky = (a: Application) => JSON.stringify([a.onboardingVerdict ?? null])
+  const controlDetectsLeak =
+    leaky(withVerdict) !== leaky({ ...app, onboardingVerdict: undefined } as Application)
+
+  return {
+    appId: app.appId,
+    position: summary?.position ?? '—',
+    policyTests: policy?.tests.length ?? 0,
+    outsidePolicy: policy?.outside ?? 0,
+    unassessable: policy?.unassessable ?? 0,
+    deterministic: guard.deterministic,
+    independent: guard.independentOfOnboarding,
+    noWriteBack: guard.noWriteBack,
+    verdictWasAttached: withVerdict.onboardingVerdict !== undefined,
+    controlDetectsLeak,
+    offences: guard.offences,
+  }
+}
+
+function Yn({ ok }: { ok: boolean }) {
+  return (
+    <span className={ok ? 'text-emerald-700' : 'font-bold text-red-700'}>{ok ? 'yes' : 'NO'}</span>
+  )
+}
+
+function Banner({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+  return (
+    <p className={ok ? 'text-slate-700' : 'font-bold text-red-700'}>
+      {ok ? '✓ ' : '✗ '}
+      {children}
+    </p>
+  )
+}
+
+function OrchestratorSection({ apps, book }: { apps: Application[]; book: Application[] }) {
+  const onb = useMemo(() => apps.map((a) => probeOnboarding(a, book)), [apps, book])
+  // Book-wide, because the curated 14 are `seed.ts` literals and carry no
+  // waivers — the construct-derived ones live on the generated population. Only
+  // 1.3 is run here, not the swarm: no cohort work, so 214 files stay cheap.
+  const bookNa = useMemo(() => {
+    let files = 0
+    for (const a of book) {
+      const o = runDecisionSufficiency(sufficiencyView(a)).output as SufficiencyOutput
+      if (o.notApplicable.length > 0) files++
+    }
+    return files
+  }, [book])
+  const cred = useMemo(() => apps.map((a) => probeCredit(a, book)), [apps, book])
+  const controls = useMemo(() => apps.map(sufficiencyControlIsLive), [apps])
+
+  const onbBad = onb.filter(
+    (r) =>
+      !r.deterministic ||
+      !r.sufficiencyIndependent ||
+      !r.noSpillover ||
+      !r.noCustomerAudience ||
+      r.customerLanes > 0 ||
+      r.customerFindings > 0,
+  )
+  const credBad = cred.filter((r) => !r.deterministic || !r.independent || !r.noWriteBack)
+  const deadControls = controls.filter((c) => !c).length
+  const deadCreditControls = cred.filter((r) => !r.controlDetectsLeak || !r.verdictWasAttached).length
+
+  return (
+    <>
+      <h2 className="mb-2 mt-6 text-[14px] font-bold">onboarding orchestrator (§v5) — anti-goal: decidable, not approvable</h2>
+      <section
+        className={`mb-3 rounded border p-3 ${
+          onbBad.length === 0 && deadControls === 0
+            ? 'border-emerald-300 bg-emerald-50'
+            : 'border-red-300 bg-red-50'
+        }`}
+      >
+        <Banner ok={onbBad.every((r) => r.sufficiencyIndependent) && onb.length > 0}>
+          <strong>Sufficiency is not approvability</strong> — decision forced to APPROVE and to
+          DECLINE, all three outputs byte-identical on{' '}
+          {onb.filter((r) => r.sufficiencyIndependent).length}/{onb.length} file(s)
+        </Banner>
+        <Banner ok={deadControls === 0}>
+          <strong>Negative control</strong> — the forcing does change the raw record, and only the{' '}
+          <code>SufficiencyView</code> neutralises it, on {onb.length - deadControls}/{onb.length}.
+          A red line here means the test above compares two identical objects and proves nothing.
+        </Banner>
+        <Banner ok={onb.every((r) => r.deterministic)}>
+          <strong>Determinism</strong> — same file, same verdict
+        </Banner>
+        <Banner ok={onb.every((r) => r.noSpillover)}>
+          <strong>No credit spillover</strong> — no finding carries a REJ-/DEV- code or an asserted
+          eligibility amount
+        </Banner>
+        <Banner ok={onb.every((r) => r.noCustomerAudience && r.customerLanes === 0 && r.customerFindings === 0)}>
+          <strong>No customer leak</strong> — every finding is <code>audience: 'bank'</code>, and{' '}
+          <code>planRun(…, {'{'} forCustomer: true {'}'})</code> plans 0 lanes. The customer sees
+          tasks, never a readiness score.
+        </Banner>
+      </section>
+
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="bg-slate-100">
+            {['app', 'ready', 'decidable', 'unanswered', 'n/a', 'determ.', 'suff⊥outcome', 'control live', 'no spillover', 'bank-only', 'cust. lanes', 'offences'].map((h) => (
+              <th key={h} className="border border-slate-200 px-2 py-1 font-semibold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {onb.map((r, i) => (
+            <tr key={r.appId} className="odd:bg-white even:bg-slate-50">
+              <td className="border border-slate-200 px-2 py-1">{r.appId}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.ready ? 'ready' : 'held'}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.decidable ? 'yes' : 'no'}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.unanswered}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.notApplicable}</td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.deterministic} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.sufficiencyIndependent} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={controls[i]} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.noSpillover} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.noCustomerAudience} /></td>
+              <td className="border border-slate-200 px-2 py-1">{r.customerLanes}</td>
+              <td className="border border-slate-200 px-2 py-1 text-red-700">
+                {r.offences.length === 0 ? <span className="text-slate-400">—</span> : r.offences.join(' · ')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 max-w-[100ch] text-slate-600">
+        <strong>“n/a” is the column that justifies agent 1.3.</strong>{' '}
+        <code>evaluateGate</code> treats an <em>absent</em> validation as resolved, so the gate
+        cannot tell “not applicable” from “never collected”. Sufficiency is the only thing in the
+        codebase that separates them — a file can be fully <em>decidable</em> with checks it never
+        ran, and undecidable with none outstanding.{' '}
+        <strong>
+          It reads 0 on all 14 rows above, and that is not the column failing.
+        </strong>{' '}
+        The curated 14 are <code>seed.ts</code> literals and carry no waived validation; the
+        construct-derived waivers (VAL-INT-12 for a self-employed co-applicant, VAL-INT-13 for a
+        salaried one) are generated onto the bulk population.{' '}
+        <strong>{bookNa} of {book.length}</strong> files across the whole book carry a
+        not-applicable — which is what makes the distinction demonstrable rather than declared.
+      </p>
+
+      <h2 className="mb-2 mt-6 text-[14px] font-bold">credit orchestrator (§v5) — anti-goal: no influence from sales</h2>
+      <section
+        className={`mb-3 rounded border p-3 ${
+          credBad.length === 0 && deadCreditControls === 0
+            ? 'border-emerald-300 bg-emerald-50'
+            : 'border-red-300 bg-red-50'
+        }`}
+      >
+        <Banner ok={cred.every((r) => r.independent)}>
+          <strong>Independent of the onboarding verdict</strong> — assessment byte-identical with
+          and without it on {cred.filter((r) => r.independent).length}/{cred.length} file(s)
+        </Banner>
+        <Banner ok={deadCreditControls === 0}>
+          <strong>Negative control</strong> — a verdict was actually attached before the test ran,
+          and a payload that <em>does</em> read it comes out different, on{' '}
+          {cred.length - deadCreditControls}/{cred.length}. Seed files carry no verdict; without
+          attaching one the test would compare two identical inputs — the exact way this guardrail
+          was broken once already.
+        </Banner>
+        <Banner ok={cred.every((r) => r.deterministic)}>
+          <strong>Determinism</strong> — same file, same position
+        </Banner>
+        <Banner ok={cred.every((r) => r.noWriteBack)}>
+          <strong>No write-back</strong> — no credit agent mutated the record it was reading
+        </Banner>
+      </section>
+
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="bg-slate-100">
+            {['app', 'position', 'policy tests', 'outside', 'unassessable', 'determ.', 'independent', 'verdict attached', 'control detects leak', 'no write-back', 'offences'].map((h) => (
+              <th key={h} className="border border-slate-200 px-2 py-1 font-semibold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {cred.map((r) => (
+            <tr key={r.appId} className="odd:bg-white even:bg-slate-50">
+              <td className="border border-slate-200 px-2 py-1">{r.appId}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.position}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.policyTests}</td>
+              <td className={`border border-slate-200 px-2 py-1 ${r.outsidePolicy > 0 ? 'font-bold text-amber-700' : ''}`}>{r.outsidePolicy}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.unassessable}</td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.deterministic} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.independent} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.verdictWasAttached} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.controlDetectsLeak} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.noWriteBack} /></td>
+              <td className="border border-slate-200 px-2 py-1 text-red-700">
+                {r.offences.length === 0 ? <span className="text-slate-400">—</span> : r.offences.join(' · ')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 max-w-[100ch] text-slate-600">
+        Both orchestrators are <strong>bank-facing</strong>: all nine sub-agents are{' '}
+        <code>internal</code>, which is why the “cust. lanes” column is 0 and why{' '}
+        <code>AgentSwarm</code>’s <code>audience="bank"</code> branch exists at all.
+      </p>
+    </>
+  )
+}
+
+// ============================================================================
+// The disbursement gating orchestrator (§v5).
+//
+// Its anti-goal runs the OPPOSITE way to the other two. Onboarding and credit
+// are each given LESS than the record — a stripped view — and the proof is that
+// output does not move when the stripped thing changes. This one must be given
+// MORE: the LRS ceiling is an annual aggregate, so a schedule that splits a
+// breach across four instalments passes every per-tranche check ever written
+// and breaches the cap.
+//
+// So the control here is a POSITIVE one: a file rigged with four tranches, each
+// comfortably inside the cap, together 12% over it. `perTrancheLrsWouldPass`
+// must say yes and `runLrsAggregate` must say no. The day those two agree, the
+// aggregate view has stopped being load-bearing.
+// ============================================================================
+
+interface DisbProbe {
+  appId: string
+  tranches: number
+  lrsHeadroomUsd: number
+  lrsWithin: boolean
+  blocked: number
+  statutoryBlocks: string[]
+  overridableBlocks: string[]
+  deterministic: boolean
+  noWriteBack: boolean
+  cannotRelease: boolean
+  aggregateBeatsPerTranche: boolean
+  /** A forged override on a statutory gate must NOT clear it. */
+  statutoryResistsOverride: boolean
+  offences: string[]
+}
+
+function probeDisbursement(app: Application): DisbProbe {
+  const results = runDisbursementSwarm(app)
+  const guard = results.disbursement_guardrail?.output as DisbursementGuardrailOutput
+  const lrs = results.lrs_aggregate?.output as LrsOutput
+  const verdicts = trancheVerdicts(app)
+  const failing = verdicts.flatMap((v) => v.gates.filter((g) => !g.passed))
+
+  // Forge an override onto every failing STATUTORY gate and require that the
+  // tranche is still held. The store refuses to write one; this asserts the
+  // read path refuses to honour one, so the rule survives a record that was
+  // tampered with rather than merely a UI that hides the button.
+  const statutoryRefs = failing.filter((g) => g.severity === 'statutory')
+  let statutoryResistsOverride = true
+  if (statutoryRefs.length > 0) {
+    const forged: Application = {
+      ...app,
+      disbursementVerdict: {
+        tranches: [],
+        lrsHeadroomUsd: 0,
+        anyStatutoryBlock: true,
+        headlines: [],
+        assessedAt: '',
+        overrides: verdicts.flatMap((v) =>
+          v.gates
+            .filter((g) => !g.passed && g.severity === 'statutory')
+            .map((g) => ({ trancheId: v.trancheId, ref: g.ref, by: 'FORGED', reason: 'forged', at: '' })),
+        ),
+      },
+    }
+    statutoryResistsOverride = verdicts
+      .filter((v) => v.statutoryBlocks.length > 0)
+      .every((v) => !releasability(forged, v.trancheId).ok)
+  }
+
+  return {
+    appId: app.appId,
+    tranches: verdicts.length,
+    lrsHeadroomUsd: lrs.headroomUsd,
+    lrsWithin: lrs.within,
+    blocked: verdicts.filter((v) => !v.releasable).length,
+    statutoryBlocks: [...new Set(failing.filter((g) => g.severity === 'statutory').map((g) => g.ref))],
+    overridableBlocks: [...new Set(failing.filter((g) => g.severity === 'overridable').map((g) => g.ref))],
+    deterministic: guard.deterministic,
+    noWriteBack: guard.noWriteBack,
+    cannotRelease: guard.cannotRelease,
+    aggregateBeatsPerTranche: guard.aggregateBeatsPerTranche,
+    statutoryResistsOverride,
+    offences: guard.offences,
+  }
+}
+
+function DisbursementSection({ book }: { book: Application[] }) {
+  // Every file that actually has a schedule, not the curated 14 — only one of
+  // those reaches disbursement, and one row proves nothing about a per-tranche
+  // orchestrator.
+  const withTranches = useMemo(() => book.filter((a) => (a.tranches ?? []).length > 0), [book])
+  const rows = useMemo(() => withTranches.map(probeDisbursement), [withTranches])
+  // The guardrail runs on EVERY file, including the 199 with no schedule at
+  // all — an agent that divides by zero on an empty tranche list would be a
+  // defect the 15 rows above could never surface.
+  const allClean = useMemo(
+    () =>
+      book.every(
+        (a) => (runDisbursementSwarm(a).disbursement_guardrail?.output as DisbursementGuardrailOutput).offences.length === 0,
+      ),
+    [book],
+  )
+
+  const customerLanes = planRun('disbursement', 'PROBE', 'PROBE', { forCustomer: true }).tasks.length
+  const customerFindings = useMemo(
+    () => book.reduce((n, a) => n + findingsFor(runDisbursementSwarm(a), 'customer').length, 0),
+    [book],
+  )
+
+  const ok = (f: (r: DisbProbe) => boolean) => rows.length > 0 && rows.every(f)
+
+  return (
+    <>
+      <h2 className="mb-2 mt-6 text-[14px] font-bold">
+        disbursement orchestrator (§v5) — anti-goal: the cap is an aggregate, not an instalment
+      </h2>
+      <section
+        className={`mb-3 rounded border p-3 ${
+          allClean && ok((r) => r.statutoryResistsOverride)
+            ? 'border-emerald-300 bg-emerald-50'
+            : 'border-red-300 bg-red-50'
+        }`}
+      >
+        <Banner ok={ok((r) => r.aggregateBeatsPerTranche)}>
+          <strong>Positive control — the aggregate catches what per-tranche misses.</strong> On a
+          file rigged with four tranches of USD 70,000, <code>perTrancheLrsWouldPass</code> returns
+          true and <code>runLrsAggregate</code> blocks. Both must hold on{' '}
+          {rows.filter((r) => r.aggregateBeatsPerTranche).length}/{rows.length}. If they ever agree,
+          the aggregate view has stopped doing anything.
+        </Banner>
+        <Banner ok={ok((r) => r.statutoryResistsOverride)}>
+          <strong>Statutory gates resist a forged override.</strong> An override is written onto
+          every failing statutory gate and the tranche must still be held — the rule lives in the
+          read path, not only in a hidden button.
+        </Banner>
+        <Banner ok={ok((r) => r.cannotRelease)}>
+          <strong>Cannot release</strong> — no tranche status, gate array or A2 flag moved during a
+          full assessment
+        </Banner>
+        <Banner ok={ok((r) => r.noWriteBack)}>
+          <strong>No write-back</strong> — the record is byte-identical after the run
+        </Banner>
+        <Banner ok={allClean}>
+          <strong>Determinism, on all {book.length} files</strong> — including the{' '}
+          {book.length - rows.length} with no schedule at all, where an empty tranche list must not
+          throw
+        </Banner>
+        <Banner ok={customerLanes === 0 && customerFindings === 0}>
+          <strong>No customer leak</strong> — all five agents are <code>internal</code>, so{' '}
+          <code>planRun('disbursement', …, {'{'} forCustomer: true {'}'})</code> plans{' '}
+          {customerLanes} lanes and the swarm produces {customerFindings} customer-audience
+          findings. Two of the four holds are statutory limits the customer cannot act on; the
+          post-sanction screen still reads the seeded <code>gatesFor</code> and is unchanged.
+        </Banner>
+      </section>
+
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="bg-slate-100">
+            {['app', 'tranches', 'LRS headroom (USD)', 'within cap', 'held', 'statutory', 'overridable', 'agg beats per-tranche', 'forged override refused', 'cannot release', 'offences'].map((h) => (
+              <th key={h} className="border border-slate-200 px-2 py-1 font-semibold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.appId} className="odd:bg-white even:bg-slate-50">
+              <td className="border border-slate-200 px-2 py-1">{r.appId}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.tranches}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.lrsHeadroomUsd.toLocaleString('en-US')}</td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.lrsWithin} /></td>
+              <td className={`border border-slate-200 px-2 py-1 ${r.blocked > 0 ? 'font-bold text-amber-700' : ''}`}>{r.blocked}</td>
+              <td className="border border-slate-200 px-2 py-1 text-red-700">{r.statutoryBlocks.join(', ') || <span className="text-slate-400">—</span>}</td>
+              <td className="border border-slate-200 px-2 py-1 text-amber-700">{r.overridableBlocks.join(', ') || <span className="text-slate-400">—</span>}</td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.aggregateBeatsPerTranche} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.statutoryResistsOverride} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.cannotRelease} /></td>
+              <td className="border border-slate-200 px-2 py-1 text-red-700">
+                {r.offences.length === 0 ? <span className="text-slate-400">—</span> : r.offences.join(' · ')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 max-w-[100ch] text-slate-600">
+        <strong>“within cap” is true on every row, and that is the honest result.</strong> This
+        product is capped at ₹1 Cr, which at ₹{POLICY.fxReference}/USD is about USD{' '}
+        {Math.round(10_000_000 / POLICY.fxReference).toLocaleString('en-US')} — a single file
+        cannot reach a USD {POLICY.lrsCapUsd.toLocaleString('en-US')} ceiling on its own. The check
+        is not decoration: it is the reason the schedule is added up at all, it binds the moment the
+        product ceiling moves, and the LRS figure it reports is the applicant’s remaining headroom
+        for the year. What it cannot see — remittances made through another bank in the same
+        financial year — it says so rather than implying the cap is clear.
+      </p>
+    </>
+  )
+}

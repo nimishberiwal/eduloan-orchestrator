@@ -70,7 +70,8 @@ exactly — 214 applications, every session and link cleared.
 
 | Document | What it is |
 |---|---|
-| `HANDOFF.md` | The dashboard: map, reasoning, open items. **Read first.** |
+| `START-HERE.md` | **Read first.** Current state, the five invariants, and what is still open |
+| `HANDOFF.md` | The dashboard: map, reasoning, open items |
 | `HANDOFF-JOURNEYS.md` | The journeys: same, and assumes you've read the above |
 | `docs/ACCEPTANCE.md` | Dashboard checklist — 14 items |
 | `docs/ACCEPTANCE-JOURNEYS.md` | Journeys checklist — 18 items, plus every defect found and fixed |

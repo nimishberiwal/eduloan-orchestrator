@@ -324,6 +324,57 @@ export interface TrancheGate {
   ref: string // validation / covenant / bucket id
   passed: boolean
 }
+/** §v5 — how much authority a failing tranche gate carries.
+ *
+ *  `statutory` cannot be overridden: the LRS ceiling is a FEMA limit and Form
+ *  A2 is the instrument the remittance is made under. Neither is a matter on
+ *  which a bank officer holds discretion, so offering an override control for
+ *  them would be offering a power the bank does not have. Same distinction as
+ *  `nonOverridable` on the S03 and S08 forward gates. */
+export type GateSeverity = 'statutory' | 'overridable'
+
+/** A tranche gate COMPUTED from the file, as against the hand-typed booleans in
+ *  `Tranche.gates`. */
+export interface ComputedGate {
+  ref: string
+  label: string
+  passed: boolean
+  severity: GateSeverity
+  detail: string
+  agent: string
+}
+
+export interface TrancheVerdict {
+  trancheId: string
+  n: number
+  type: TrancheType
+  releasable: boolean
+  gates: ComputedGate[]
+  /** Refs of failing gates that no officer can clear. */
+  statutoryBlocks: string[]
+}
+
+/** An officer proceeding past one overridable gate on one tranche. Recorded per
+ *  gate rather than per tranche: overriding a rate-band finding says nothing
+ *  about a visa, and a single blanket override would let one reason clear two
+ *  unrelated holds. */
+export interface TrancheGateOverride {
+  trancheId: string
+  ref: string
+  by: string
+  reason: string
+  at: string
+}
+
+export interface DisbursementVerdict {
+  tranches: TrancheVerdict[]
+  lrsHeadroomUsd: number
+  anyStatutoryBlock: boolean
+  headlines: { agent: string; headline: string }[]
+  assessedAt: string
+  overrides?: TrancheGateOverride[]
+}
+
 export interface Tranche {
   id: string
   n: number
@@ -688,6 +739,8 @@ export interface Application {
   onboardingVerdict?: OnboardingVerdict
   /** §v5 — the credit orchestrator's position. Optional, like every v5+ field. */
   creditAssessment?: CreditAssessment
+  /** §v5 — the disbursement orchestrator's per-tranche gating verdict. */
+  disbursementVerdict?: DisbursementVerdict
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'

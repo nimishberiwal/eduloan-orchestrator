@@ -131,7 +131,7 @@ more swarm functions, and each is held by a guardrail agent that can fail:
 |---|---|
 | Agent runtime | `src/lib/agents/{types,registry,runtime}.ts` |
 | Assisting swarms | `src/lib/agents/{documents,sanction,university,universityCorpus}.ts` |
-| **Orchestrators** | `src/lib/agents/{onboarding,credit}.ts` |
+| **Orchestrators** | `src/lib/agents/{onboarding,credit,disbursement}.ts` |
 | Timer state | `src/store/agentStore.ts` — the **only** timer-driven state in the codebase |
 | Agent UI | `src/journeys/common/{AgentSwarm,SmartFill}.tsx` |
 | Self-declaration | `src/lib/declared.ts`, `src/journeys/useDeclaration.ts` |
@@ -188,6 +188,7 @@ screen which used to only take typing now also offers an upload.
 | **The onboarding orchestrator** | App-360 → **Readiness** — run it on a file at S05 and watch `Move forward` refuse |
 | **The credit orchestrator** | App-360 → **Credit assessment** |
 | Determinism and parallelism | `/__dev/agents` |
+| **The two anti-goal proofs, with their negative controls** | `/__dev/agents` — the last two sections |
 
 ---
 
@@ -204,6 +205,9 @@ screen which used to only take typing now also offers an upload.
 | `v2.1.0` | A causally consistent seed, so cohort learning has real signal |
 | `v2.2.0` | The customer onboarding orchestrator and the S05 handover gate |
 | `v2.3.0` | The credit decisioning orchestrator, independent by construction |
+| `v2.3.1` | Marker reconciliation — `§V3` → `§v5`; this document rewritten |
+| `v2.4.0` | The anti-goal harness at `/__dev/agents`; two seed contradictions closed |
+| `v2.5.0` | The disbursement gating orchestrator — five agents, per tranche, two grades of authority |
 
 The rule for this repo, unchanged: **no push without a version** — a semver tag,
 a `CHANGELOG.md` entry recording what was *verified*, and a GitHub Release.

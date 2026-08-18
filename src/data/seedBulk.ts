@@ -24,6 +24,8 @@ import type {
   StageId,
   Status,
   Tier,
+  Tranche,
+  TrancheStatus,
   ValidationResult,
 } from '@/types'
 import { ACTIVE_VALIDATIONS } from '@/data/validations'
@@ -54,6 +56,17 @@ interface Rng {
   pick: <T>(arr: readonly T[]) => T
   weighted: <T>(entries: readonly (readonly [T, number])[]) => T
   chance: (p: number) => boolean
+}
+
+/** A stable numeric seed from an application id, so a per-application stream
+ *  can be opened without touching the shared one. */
+function hashSeed(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
 }
 
 function makeRng(seed: number): Rng {
@@ -264,20 +277,114 @@ function cachedBuckets(profile: Parameters<typeof generateBuckets>[0]) {
   return v.map((b) => ({ ...b }))
 }
 
-function liteValidations(stage: Stage, rng: Rng, failIds: string[]): ValidationResult[] {
+function liteValidations(
+  stage: Stage,
+  rng: Rng,
+  failIds: string[],
+  waived: { id: string; reason: string }[] = [],
+): ValidationResult[] {
   const rank = stageRank(stage)
   const out: ValidationResult[] = []
+  const waivedById = new Map(waived.map((w) => [w.id, w.reason]))
   for (const def of ACTIVE_VALIDATIONS) {
     const m = def.triggerStage.match(/S(\d\d)/)
     const trig = m ? parseInt(m[1], 10) : 99
     if (trig > rank) continue // not yet triggered — omitted (treated as resolved)
-    if (failIds.includes(def.id)) {
+    const reason = waivedById.get(def.id)
+    if (reason) {
+      // §v5 — NOT APPLICABLE, which is a different thing from resolved and a
+      // different thing again from never collected. Nothing in the seed carried
+      // a waived validation before, so `SufficiencyOutput.notApplicable` was
+      // empty on all 214 files and agent 1.3's central distinction — the gate
+      // reads an ABSENT validation as a pass — could only ever be shown from
+      // the "never collected" side.
+      out.push({ catalogueId: def.id, status: 'waived', message: reason })
+    } else if (failIds.includes(def.id)) {
       out.push({ catalogueId: def.id, status: 'fail', message: def.failMessage })
     } else {
       out.push({ catalogueId: def.id, status: 'pass', message: def.passMessage })
     }
   }
   return out
+}
+
+/** The waivers a file's own construct makes inevitable.
+ *
+ *  Both of these are written into the catalogue as construct-dependent —
+ *  VAL-INT-12 is "(co-applicant salaried)" and VAL-INT-13 is "(co-app SE)". A
+ *  salaried co-applicant has no P&L and no balance sheet to reconcile; a
+ *  self-employed one files no Form 16. Exactly one of the pair is inapplicable
+ *  on every file, and which one is decided by the income branch rather than a
+ *  draw — the same discipline the closure causes follow. */
+function constructWaivers(incomeBranch: 'salaried' | 'self_employed'): { id: string; reason: string }[] {
+  return incomeBranch === 'salaried'
+    ? [{ id: 'VAL-INT-13', reason: 'Not applicable — co-applicant is salaried; there is no P&L or balance sheet to reconcile.' }]
+    : [{ id: 'VAL-INT-12', reason: 'Not applicable — co-applicant is self-employed and files no Form 16.' }]
+}
+
+
+/** §v5 — a tranche schedule for files that have reached disbursement.
+ *
+ *  Nothing generated one before, so `tranches: []` on all 200 bulk files and
+ *  the only schedule in the whole seed was the hand-written pair on APP-2612.
+ *  The disbursement gating orchestrator would have had a single file to run on.
+ *
+ *  Shape follows the curated file: a tuition tranche remitted per semester by
+ *  SWIFT to the university, and a smaller living tranche. Amounts derive from
+ *  the file's own ask at the policy FX reference, so `amountUsd × fxUsed`
+ *  reconciles to `amountInr` exactly — the rate agent checks that, and a seed
+ *  that failed its own arithmetic would be reporting a defect that is not
+ *  there. A minority draw an off-reference rate, which is a real condition the
+ *  band test exists to catch. */
+function buildTranches(appId: string, askInr: number, rank: number): Tranche[] {
+  // A PRIVATE stream, seeded from the application id.
+  //
+  // Not the shared `rng`: every draw taken from that one shifts the sequence
+  // for every application generated afterwards. Adding tranches to the ~30
+  // files at disbursement would have silently re-rolled the closure causes,
+  // stages and bureau scores of the other 170 — the disbursed population fell
+  // from 7 to 4 on the first attempt, which is a Phase 1 guarantee quietly
+  // undone by a Phase 3 feature. Seeded from the id, this is deterministic,
+  // repeatable, and costs the shared stream nothing.
+  const rng = makeRng(hashSeed(appId))
+  const totalUsd = Math.round(askInr / POLICY.fxReference)
+  // Two semesters, tuition-heavy, living the remainder.
+  const split = [
+    { n: 1, type: 'Tuition-SWIFT-to-university' as const, share: 0.45, semester: 'Fall 2026' },
+    { n: 2, type: 'Living-to-foreign-account-or-forex-card' as const, share: 0.2, semester: 'Fall 2026' },
+    { n: 3, type: 'Tuition-SWIFT-to-university' as const, share: 0.35, semester: 'Spring 2027' },
+  ]
+  return split.map(({ n, type, share, semester }) => {
+    // A slice of tranches carry a rate off the reference — the only thing on a
+    // file that can put VAL-CRS-24 outside its band.
+    const offBand = rng.chance(0.12)
+    const fxUsed = offBand
+      ? Math.round(POLICY.fxReference * (1 + rng.pick([-0.035, -0.028, 0.031, 0.042])) * 100) / 100
+      : POLICY.fxReference
+    const amountUsd = Math.round(totalUsd * share)
+    const status: TrancheStatus =
+      rank >= 13 && n === 1 ? 'remitted' : rank >= 13 && n === 2 ? 'gated' : 'scheduled'
+    return {
+      id: `T${appId.slice(4)}-${n}`,
+      n,
+      type,
+      semester,
+      amountUsd,
+      amountInr: Math.round(amountUsd * fxUsed),
+      fxUsed,
+      // Seeded gate booleans are left EMPTY on generated files. They were only
+      // ever hand-typed, and the orchestrator computes them from the file — a
+      // stored copy would be a second answer to the same question.
+      gates: [],
+      status,
+      // A minority reach disbursement without Form A2 filed, which is the
+      // statutory block the FEMA agent exists to raise — but NEVER on a tranche
+      // that has already gone. Money cannot have been remitted without the
+      // instrument it was remitted under, and a seed that says otherwise is
+      // asking the agent to report a contradiction rather than a finding.
+      a2FemaOnFile: status === 'remitted' ? true : !rng.chance(0.15),
+    }
+  })
 }
 
 // ---- Generator -------------------------------------------------------------
@@ -432,7 +539,7 @@ function makeApp(i: number, rng: Rng): Application {
   // --- validations (lite) --------------------------------------------------
   const failIds: string[] = []
   if (!terminal && rng.chance(0.18)) failIds.push(rng.pick(['VAL-CRS-01', 'VAL-INT-06', 'VAL-EXT-03', 'VAL-CRS-17', 'VAL-EXT-11']))
-  const validations = liteValidations(stage, rng, failIds)
+  const validations = liteValidations(stage, rng, failIds, constructWaivers(profile.incomeBranch))
 
   // --- sanction clock ------------------------------------------------------
   // A sanction-lapse expiry and a visa rejection after documentation both
@@ -561,7 +668,10 @@ function makeApp(i: number, rng: Rng): Application {
     assignment,
     createdAt,
     stageEnteredAt,
-    stageHistory: buildHistory(stage, stageEnteredAt),
+    // §v5 — terminal files synthesize their history up to the stage they were
+    // actually closed in, so `stageHistory` and `outcome.stageAtClosure` cannot
+    // disagree. `funnelRollup` reads "reached stage N" off this array.
+    stageHistory: buildHistory(stage, stageEnteredAt, 3, outcome?.stageAtClosure),
     sanctionDate,
     sanctionExpiryDate,
     lastCustomerActivityAt: blockerKind === 'customer' ? lastActivityAt : undefined,
@@ -591,7 +701,16 @@ function makeApp(i: number, rng: Rng): Application {
     validations,
     deviations,
     covenants: [],
-    tranches: [],
+    // §v5 — only files that actually reached disbursement carry a schedule.
+    //
+    // Named stages, NOT `rank >= 13`: `stageRank` returns 99 for every terminal
+    // token, so a rank test hands a tranche schedule to REJECTED, WITHDRAWN and
+    // EXPIRED files as well — 28 of them, including files closed at S07 that
+    // never saw a sanction. A rejected application has no disbursement.
+    tranches:
+      stage === 'S13' || stage === 'DISBURSED_ACTIVE'
+        ? buildTranches(appId, askInr, stageRank(stage))
+        : [],
     audit: [
       {
         id: `${appId}-AE1`,

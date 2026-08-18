@@ -81,6 +81,36 @@ function enforceStagger(durations: number[]): number[] {
 /** Status lines for a lane, revealed in sequence. Deliberately concrete — "Reading
  *  page 1 of 2" tells a reviewer more than "Processing…". */
 const STEPS: Record<AgentId, string[]> = {
+  lrs_aggregate: [
+    'Reading every tranche on the schedule',
+    'Adding the student and the parent together',
+    'Placing them in the financial year',
+    'Measuring what is left under the cap',
+  ],
+  fema_compliance: [
+    'Looking for Form A2 on each tranche',
+    'Reading the declared purpose',
+    'Checking who is being paid',
+    'Recording what is missing',
+  ],
+  visa_gating: [
+    'Reading the endorsement status',
+    'Separating tuition from living tranches',
+    'Applying the sequencing rule',
+    'Recording which tranches that releases',
+  ],
+  fx_band: [
+    'Reading the rate used on each tranche',
+    'Comparing it with the reference rate',
+    'Recomputing the rupee figure',
+    'Recording anything outside the band',
+  ],
+  disbursement_guardrail: [
+    'Running the four checks twice',
+    'Comparing the two runs',
+    'Checking the file was not written to',
+    'Testing the cap against a per-tranche view',
+  ],
   fresh_assessment: [
     'Taking the file without the sales view',
     'Reading the parties and the ask',

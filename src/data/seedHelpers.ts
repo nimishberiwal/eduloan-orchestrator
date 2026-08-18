@@ -34,13 +34,34 @@ export function buildHistory(
   current: Stage,
   stageEnteredAt: string,
   gapDays = 3,
+  /** §v5 — the S-stage the file was actually closed IN, for terminal files.
+   *
+   *  Without it a terminal file's history was synthesized to a depth fixed by
+   *  its terminal token alone: REJECTED → S10, EXPIRED → S04, everything else
+   *  → S13. That depth is independent of `outcome.stageAtClosure`, which is
+   *  derived from the closure cause — so the two disagreed on 27 of the 37
+   *  closed files. A file withdrawn at S04 carried a history through S13, and
+   *  `funnelRollup` counts "reached stage N" straight off `stageHistory`, so
+   *  every one of those files was counted as having reached stages it never
+   *  saw. An EXPIRED file whose sanction lapsed (EXP-02, closure S11) got the
+   *  4-deep expiry history and never reached sanction at all.
+   *
+   *  Optional, and omitted by `seed.ts`: the 14 curated literals already agree
+   *  with their own histories and must not move. */
+  closureStage?: Stage,
 ): { stage: string; enteredAt: string }[] {
   const order: StageId[] = STAGES.map((s) => s.id)
   const idx = order.indexOf(current as StageId)
   const history: { stage: string; enteredAt: string }[] = []
   if (idx < 0) {
-    // terminal — synthesize a short history up to S10 for analytics
-    const synthUpto = current === 'REJECTED' ? 10 : current === 'EXPIRED' ? 4 : 13
+    // terminal — synthesize the run of stages the file actually walked, ending
+    // at the stage it closed in. Falls back to the old fixed depths when the
+    // caller does not know the closure stage.
+    const closureIdx = closureStage ? order.indexOf(closureStage as StageId) : -1
+    const synthUpto =
+      closureIdx >= 0
+        ? closureIdx + 1
+        : current === 'REJECTED' ? 10 : current === 'EXPIRED' ? 4 : 13
     for (let i = 0; i < synthUpto; i++) {
       history.push({ stage: order[i], enteredAt: daysAgoIso((synthUpto - i) * gapDays + 5) })
     }

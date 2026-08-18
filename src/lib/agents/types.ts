@@ -40,8 +40,20 @@ export type AgentId =
   | 'college_cohort'
   | 'policy_fit'
   | 'credit_guardrail'
+  // --- the disbursement gating orchestrator (§v5) ---
+  | 'lrs_aggregate'
+  | 'fema_compliance'
+  | 'visa_gating'
+  | 'fx_band'
+  | 'disbursement_guardrail'
 
-export type SwarmKind = 'document' | 'sanction' | 'university' | 'onboarding' | 'credit'
+export type SwarmKind =
+  | 'document'
+  | 'sanction'
+  | 'university'
+  | 'onboarding'
+  | 'credit'
+  | 'disbursement'
 
 export type LaneStatus = 'queued' | 'running' | 'done' | 'failed'
 

@@ -23,6 +23,252 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.5.0] — 2026-08-19
+
+**The disbursement gating orchestrator.** The third orchestrator, and the only
+one that repeats: onboarding runs once at S05 and credit once around S06/S07,
+this one runs on every tranche of every file. Five agents in
+`src/lib/agents/disbursement.ts`.
+
+### Why S13 and not somewhere else
+
+`Tranche.gates` was an array of hand-typed booleans. Nothing computed them. The
+only thing that ever moved one was `toggleField`, reaching into every tranche to
+flip `VAL-CRS-23`/`VAL-EXT-18` when `endorsement_verified` changed. The LRS cap,
+the FEMA paperwork, the payee and the rate were seeded `true` and never tested
+against the file at all.
+
+`POLICY.lrsCapUsd` and `POLICY.forexBandPct` got their first reader in `2.3.0`,
+in the credit orchestrator — at **assessment** time, which is not the moment
+either of them binds. They bind here, per tranche, when money actually moves.
+
+### The anti-goal runs the other way
+
+Onboarding and credit are each handed **less** than the record — a
+`SufficiencyView` with the decision stripped, a `CreditView` with the verdict
+stripped — and each is proven by showing the output does not move.
+
+This one must be handed **more**. The LRS ceiling is an annual aggregate, so a
+schedule of four USD 70,000 tranches passes every per-tranche check ever written
+and breaches a USD 250,000 cap by USD 30,000. `runLrsAggregate` therefore takes
+the whole schedule by construction; there is no per-tranche variant to reach for
+by mistake.
+
+`perTrancheLrsWouldPass` exists **only** as the control — it is the wrong answer,
+kept so the right one can be shown to differ from it. The guardrail rigs a file
+and requires the two to disagree. The day they agree, the aggregate view has
+stopped being load-bearing.
+
+### Two grades of authority, and the second one cannot be waived
+
+| Gate | Severity | Because |
+|---|---|---|
+| `VAL-CRS-21` LRS aggregate | **statutory** | A FEMA limit. Not a matter on which an officer holds discretion |
+| `VAL-CRS-22` Form A2 + FEMA | **statutory** | The instrument the remittance is made under |
+| `VAL-CRS-23` Visa endorsement | overridable | Sequencing. Audited override, as at S05 |
+| `VAL-CRS-24` Rate within band | overridable | A treasury forward can legitimately sit outside today's reference |
+
+Same `nonOverridable` distinction S03 and S08 already carry, in the same
+vocabulary. Statutory gates are refused **twice**: `overrideTrancheGate` will not
+write one, and `releasability` will not honour one — so the rule survives a
+record that was tampered with, not merely a UI that hides the button. The dev
+harness proves the second half by forging an override and requiring the tranche
+to stay held.
+
+Overrides are per **gate**, not per tranche: a reason that clears a rate finding
+says nothing about a visa. They survive a re-run of the agents.
+
+### Fixed — two seed contradictions the agent surfaced
+
+- **Rejected, withdrawn and expired files carried disbursement schedules.** The
+  first cut gated on `rank >= 13`, and `stageRank` returns 99 for every terminal
+  token — so 28 closed files, including ones that died at S07, were handed a
+  tranche schedule. Now named stages: `S13` and `DISBURSED_ACTIVE` only, which
+  is **15** files and matches the funnel's corrected S13 reach exactly.
+- **A remitted tranche could lack Form A2** — money remitted without the
+  instrument it is remitted under. `a2FemaOnFile` is now forced true on a
+  remitted tranche.
+
+And a related rule in the agent: a **settled** tranche is not re-gated on any of
+the four checks. Reporting a hold on money that has already gone states a problem
+no officer can act on. The LRS aggregate still *counts* those tranches — they
+consumed the year's headroom — which is a different thing from gating them.
+
+### Changed — `buildTranches` uses a private RNG stream
+
+Seeded from the application id, not the shared generator. Every draw taken from
+the shared stream shifts the sequence for every application built afterwards:
+the first version re-rolled the closure causes and bureau scores of the other
+170 files, and the disbursed population fell from **7 to 4** — a `2.1.0`
+guarantee quietly undone by a `2.5.0` feature. With a private stream the rest of
+the seed is byte-identical.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` · `npm run build` · standalone | clean · clean · 0.97 MB |
+| `scan-vocabulary` | `leaks: []` |
+| Applications | 214, unchanged |
+| **Curated 14 byte-identical** | `sha256 f00319c0…4aa227`, unchanged through all of `2.4.0` and `2.5.0` |
+| Files with a schedule | 15 (8 at S13, 7 disbursed) · 44 tranches |
+| Guardrail breaches | 0 / 214 — including the 199 with no schedule, where an empty tranche list must not throw |
+| Positive control (aggregate beats per-tranche) | 15 / 15 |
+| Forged statutory override refused | 15 / 15 |
+| Cannot release · no write-back | 15 / 15 · 15 / 15 |
+| Settled-but-held tranches | **0** |
+| Remitted without A2 | **0** |
+| Customer leak | 0 lanes, 0 customer-audience findings |
+| **ACCEPTANCE item 8 preserved** | APP-2612 T2 held before endorsement, releasable after — unchanged with agent gates layered on |
+| Statutory walk | APP-2823 → override refused with a toast, 0 overrides written, release refused |
+| Overridable walk | APP-2823 T2 (rate +2.8%) → override recorded and audited → release proposed → `pendingChecker`, maker Admin |
+| `resetDemo` | clears the verdict, restores `gated` |
+| Prior invariants | closure/history 0 breaches · onboarding, credit, sufficiency and independence probes all unchanged |
+
+### Known / open
+
+- **The LRS cap never binds on this book, and the harness says so.** A ₹1 Cr
+  product is about USD 119,000 at ₹84 — a single file cannot reach a USD 250,000
+  ceiling. The check is not decoration (it is why the schedule is summed at all,
+  and it binds the moment the ceiling moves) but on this population its value is
+  the *headroom figure*, not the block. Only the rigged control exercises the
+  breach path.
+- **The agent cannot see remittances made through another bank** in the same
+  financial year, which consume the same cap. `LrsOutput.basis` states this
+  rather than implying the cap is clear.
+- The customer's post-sanction screen still reads the seeded `gatesFor` and is
+  deliberately unchanged — two of the four holds are statutory limits a customer
+  cannot act on. A customer may therefore request a tranche the bank will refuse.
+- S09 collateral, S03 KYC and S12 documentation still have no agent.
+- Not tagged or pushed. `package.json` is bumped and this entry is written; the
+  tag, commit and GitHub Release are the owner's call.
+
+---
+
+## [2.4.0] — 2026-08-18
+
+> **No separate `v2.4.0` tag.** This entry was written but never pushed, and its
+> changes are carried inside `v2.5.0`. Tagging it now would point a tag at a
+> tree containing the whole of `2.5.0` as well — a tag that does not describe
+> its own code is worse than a missing one (`RELEASING.md` §5). The entry stays
+> as written because the work is real and separately reviewable.
+
+**The two orchestrators get their harness, and the seed stops contradicting
+itself about where files died.** `docs/VERSIONS.md` verification item 3 — *"a
+new `/__dev/agents` section per orchestrator"* — was the one part of the wave-2
+brief never built. The anti-goal properties were enforced in `onboarding.ts` and
+`credit.ts` and provable, but nothing ran them where they could be seen.
+
+### Fixed — `stageHistory` disagreed with `stageAtClosure` on 27 of 37 closed files
+
+Wave 2 made `outcome.stageAtClosure` causal: it comes from the closure cause, so
+a collateral shortfall closes at S09 and adverse bureau at S06. `stageHistory`
+was left alone, and it is synthesized to a depth fixed by the *terminal token*
+alone — `REJECTED` → S10, `EXPIRED` → S04, everything else → S13. The two were
+never reconciled:
+
+| | Was | Now |
+|---|---|---|
+| Closure stage absent from the file's own history | 3 (all `EXP-02`) | 0 |
+| History running past the stage the file closed in | 24 | 0 |
+
+An `EXP-02` file is a **lapsed sanction** — closure stage S11 — carrying the
+4-deep expiry history that stops at S04. It expired for the lapse of a sanction
+it had never reached. In the other direction a file withdrawn at S04 carried a
+history through S13.
+
+This was not cosmetic. `funnelRollup` reads *"reached stage N"* straight off
+`stageHistory`, so every overshooting file was counted at stages it never saw:
+
+| | Was | Now |
+|---|---|---|
+| Reached S08 | 74 | 56 |
+| Reached S11 | 35 | 31 |
+| Reached S13 | **22** | **15** |
+
+15 is the number that reconciles: 8 files in flight at S13 plus 7 disbursed
+closures. The old 22 counted seven files that had been withdrawn or rejected
+earlier. `buildHistory` now takes the closure stage and synthesizes the run the
+file actually walked. `closureByStage` is unchanged — it reads `stageAtClosure`,
+which was already causal.
+
+### Fixed — `SufficiencyOutput.notApplicable` was empty on all 214 files
+
+Agent 1.3's stated purpose is that `evaluateGate` treats an **absent**
+validation as resolved, so the gate cannot tell *"not applicable"* from *"never
+collected"*. Sufficiency separates them by reading `status === 'waived'` — and
+no seed file carried a waived validation, so the distinction could only ever be
+shown from the "never collected" side.
+
+The waivers are **derived, not drawn**. Two S06-gate rules are written into the
+catalogue as construct-dependent — `VAL-INT-12` is *"(co-applicant salaried)"*
+and `VAL-INT-13` is *"(co-app SE)"*. Exactly one is inapplicable on every file,
+and which one is decided by the income branch. A salaried co-applicant has no
+P&L to reconcile; a self-employed one files no Form 16. **101 of 214** files now
+carry a not-applicable. Decidability and gating are unaffected: waived already
+counted as resolved for the gate, which is the point — the gate says resolved
+and sufficiency says *not applicable*, which are different facts.
+
+### Added — `/__dev/agents` sections for both orchestrators
+
+Following the existing probe pattern: a pure probe per file, a flat interface, a
+banner per property and a row per application.
+
+- **Onboarding** — sufficiency-is-not-approvability (decision forced to APPROVE
+  and DECLINE, all three outputs byte-identical), determinism, no credit
+  spillover, no customer leak (`audience: 'bank'` on every finding, and
+  `planRun(…, { forCustomer: true })` planning 0 lanes).
+- **Credit** — independence of the onboarding verdict, determinism, no
+  write-back.
+
+**Both carry a negative control**, because this repo has already shipped a
+guardrail that could not fail (see the `assessmentFingerprint` note under
+`2.3.0`). Seed files carry no `onboardingVerdict` at all, so an independence
+test run on them compares two identical inputs and passes on anything: the
+credit probe now **attaches** a verdict first, and asserts that a payload which
+*does* read it comes out different. The onboarding control asserts that forcing
+the decision genuinely changes the raw record and that only `sufficiencyView`
+neutralises it. If a control goes red, the test beside it has stopped meaning
+anything.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` · `npm run build` · standalone | clean · clean · 0.95 MB |
+| `scan-vocabulary` | `leaks: []` (31 files, 8 patterns) |
+| Applications | 214, unchanged |
+| **Curated 14 byte-identical** | `sha256 f00319c0…4aa227` before and after both seed changes |
+| Closure/history contradictions | 27 → **0** across all 37 closed files |
+| Onboarding guardrail | 0 breaches / 214 |
+| Sufficiency ⊥ outcome | 214 / 214 byte-identical under forced APPROVE and DECLINE |
+| Credit guardrail | 0 breaches / 214 |
+| Credit ⊥ onboarding verdict | 214 / 214 byte-identical with and without |
+| Swarm determinism | 0 non-deterministic / 214, both orchestrators |
+| Onboarding findings not `audience: 'bank'` | 0 |
+| Live gate walk | APP-2713 at S05 → `ONBOARDING HELD` (8 unanswered) → `moveForward` refused → `ONBOARDING OVERRIDDEN` audited with officer and reason, verdict still `ready: false` → advances to S06 |
+| `resetDemo` | restores S05 and clears the verdict |
+| Analytics | Overview, funnel and Rejections & closures render; no console errors |
+
+ACCEPTANCE items 4 and 5 rest on APP-2605 and APP-2608, both curated — covered
+by the byte-identical hash above, which is a stronger check than a re-walk.
+Item 12's funnel moves as tabulated.
+
+### Known / open
+
+- **The funnel numbers in any screenshot taken before this version are wrong**,
+  and the corrected ones are lower at every stage from S03 down.
+- `notApplicable` is 0 on the curated 14 and the `/__dev/agents` table shows it
+  as such — those are `seed.ts` literals and carry no waivers. The section says
+  so and prints the book-wide count beside it.
+- The credit probe's negative control proves the two inputs are
+  *distinguishable*; it does not run a deliberately leaking agent. A rigged
+  agent would be the stronger control and is not built.
+- Not tagged or pushed. `package.json` is bumped and this entry is written;
+  the tag, commit and GitHub Release are the owner's call.
+
+---
+
 ## [2.3.1] — 2026-08-18
 
 Documentation and marker reconciliation. **No behaviour change** — comments,
