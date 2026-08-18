@@ -81,6 +81,30 @@ function enforceStagger(durations: number[]): number[] {
 /** Status lines for a lane, revealed in sequence. Deliberately concrete — "Reading
  *  page 1 of 2" tells a reviewer more than "Processing…". */
 const STEPS: Record<AgentId, string[]> = {
+  minimum_data: [
+    'Finding files like this one',
+    'Reading what they had when a decision was reached',
+    'Setting the bar for this file',
+    'Comparing what is on file against it',
+  ],
+  co_applicant_fit: [
+    'Reading the co-applicant on file',
+    'Re-running the eligibility without them',
+    'Re-running it with them',
+    'Comparing the two',
+  ],
+  decision_sufficiency: [
+    'Listing what a decision would rest on',
+    'Separating not-applicable from never-collected',
+    'Checking each has an answer',
+    'Judging whether a decision is possible',
+  ],
+  onboarding_guardrail: [
+    'Re-running the other three',
+    'Checking their answers did not move',
+    'Checking none of them reached into credit',
+    'Checking none of them reached the customer',
+  ],
   extraction: [
     'Opening the file',
     'Finding the text on the page',

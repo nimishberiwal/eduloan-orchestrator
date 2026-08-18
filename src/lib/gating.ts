@@ -10,7 +10,7 @@ export interface GateFailure {
   id: string
   title: string
   message: string
-  kind: 'validation' | 'bucket' | 'checker' | 'covenant'
+  kind: 'validation' | 'bucket' | 'checker' | 'covenant' | 'onboarding'
 }
 
 export interface GateEvaluation {
@@ -82,6 +82,37 @@ export function evaluateGate(app: Application): GateEvaluation | null {
         kind: 'covenant',
       })
     }
+  }
+
+  // S05 → S06: the onboarding orchestrator's readiness verdict (§V3).
+  //
+  // This is the handover. `defaultDeptForStage` reassigns the file from Ops to
+  // Credit at S06, so S05's exit is the moment collection ends and assessment
+  // begins — and the point at which "is this file complete enough" stops being
+  // a rhetorical question.
+  //
+  // Absence of a verdict is NOT a failure. A file that has never been assessed
+  // is held by its validations like any other; inventing a block for one the
+  // orchestrator has not looked at would make every legacy file unmovable.
+  // An override clears the gate WITHOUT rewriting the verdict — `ready` stays
+  // false and `overriddenBy` records who disagreed. The file moves; the record
+  // does not pretend it was complete.
+  if (
+    stage === 'S05' &&
+    app.onboardingVerdict &&
+    !app.onboardingVerdict.ready &&
+    !app.onboardingVerdict.overriddenBy
+  ) {
+    const v = app.onboardingVerdict
+    failures.push({
+      id: 'ONBOARDING',
+      title: 'Not complete enough to hand to credit',
+      message:
+        v.blockingReasons.length > 0
+          ? v.blockingReasons.join(' · ')
+          : 'The onboarding assessment has not cleared this file.',
+      kind: 'onboarding',
+    })
   }
 
   // S10: maker-checker must be countersigned

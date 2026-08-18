@@ -22,6 +22,7 @@ import { briefFromRun, runUniversitySwarm } from '@/lib/agents/university'
 import { BRIEF_TTL_HOURS, briefStaleness } from '@/lib/agents/university'
 import { gatesFor } from '@/lib/declared'
 import { docToText } from '@/lib/agents/sanction'
+import { AGENT_BY_ID } from '@/lib/agents/registry'
 import { downloadText, stampedName } from '@/lib/csv'
 
 // ---- Documents -------------------------------------------------------------
@@ -671,6 +672,114 @@ export function TranchesTab({ app }: { app: Application }) {
 // ---- Comms -----------------------------------------------------------------
 export function CommsTab({ app }: { app: Application }) {
   return <CommThread app={app} />
+}
+
+// ---- Readiness — the onboarding orchestrator (§V3) --------------------------
+export function OnboardingTab({ app }: { app: Application }) {
+  const assess = useStore((s) => s.assessOnboarding)
+  const override = useStore((s) => s.overrideOnboarding)
+  const [reason, setReason] = useState('')
+  const v = app.onboardingVerdict
+
+  if (!v) {
+    return (
+      <div className="rounded-xl border border-[var(--line)] bg-white p-4 shadow-card">
+        <div className="text-13 text-slate-600">
+          This file has not been assessed. The onboarding orchestrator decides whether it is
+          complete enough to hand to credit, and its verdict holds the S05 → S06 exit.
+        </div>
+        <button
+          className="mt-3 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-12 font-semibold text-white"
+          onClick={() => assess(app.appId, { kind: 'system', sessionId: 'SYS' })}
+        >
+          Run the assessment
+        </button>
+      </div>
+    )
+  }
+
+  const overridden = Boolean(v.overriddenBy)
+  return (
+    <div className="space-y-3">
+      <div
+        className={`rounded-xl border p-3 shadow-card ${
+          v.ready ? 'border-emerald-200 bg-emerald-50/50'
+          : overridden ? 'border-amber-200 bg-amber-50/40'
+          : 'border-red-200 bg-red-50/40'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-700">
+            {v.ready ? 'Complete enough to hand to credit'
+             : overridden ? 'Held — proceeding on an override'
+             : 'Not complete enough to hand to credit'}
+          </span>
+          <Chip tone={v.ready ? 'green' : overridden ? 'amber' : 'red'}>
+            {v.ready ? 'ready' : 'held at S05'}
+          </Chip>
+          <span className="ml-auto text-11 text-slate-400">assessed {fmtDateTime(v.assessedAt)}</span>
+        </div>
+
+        {!v.ready && (
+          <ul className="mt-2 space-y-0.5">
+            {v.blockingReasons.map((r) => (
+              <li key={r} className="text-12 text-slate-600">· {r}</li>
+            ))}
+          </ul>
+        )}
+
+        {overridden && (
+          <div className="mt-2 rounded-lg border border-amber-200 bg-white/70 px-2.5 py-1.5 text-12 text-slate-600">
+            {/* The verdict is NOT rewritten to ready. Someone decided to proceed;
+                the file should carry both facts, not the tidier one. */}
+            Overridden by <b>{v.overriddenBy}</b> — {v.overrideReason}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+          What the four agents found
+        </div>
+        <div className="space-y-1">
+          {v.headlines.map((h) => (
+            <div key={h.agent} className="flex items-start gap-2 text-12">
+              <span className="w-44 shrink-0 font-medium text-slate-500">
+                {AGENT_BY_ID[h.agent as keyof typeof AGENT_BY_ID]?.name ?? h.agent}
+              </span>
+              <span className="text-slate-700">{h.headline}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          className="rounded-lg border border-[var(--line)] px-2.5 py-1 text-12 font-semibold text-slate-600 hover:bg-slate-50"
+          onClick={() => assess(app.appId, { kind: 'system', sessionId: 'SYS' })}
+        >
+          Re-assess
+        </button>
+        {!v.ready && !overridden && (
+          <>
+            <input
+              className="min-w-[220px] flex-1 rounded-lg border border-[var(--line)] px-2 py-1 text-12"
+              placeholder="Why are you proceeding anyway?"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+            <button
+              className="rounded-lg bg-amber-500 px-2.5 py-1 text-12 font-semibold text-white disabled:opacity-40"
+              disabled={reason.trim().length < 4}
+              onClick={() => { override(app.appId, reason.trim()); setReason('') }}
+            >
+              Override and proceed
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ---- Sanction pack (§Phase D) ----------------------------------------------

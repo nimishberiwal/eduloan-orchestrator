@@ -29,8 +29,13 @@ export type AgentId =
   | 'outreach'
   // --- standalone (§E) ---
   | 'university_intel'
+  // --- the onboarding orchestrator (§V3) ---
+  | 'minimum_data'
+  | 'co_applicant_fit'
+  | 'decision_sufficiency'
+  | 'onboarding_guardrail'
 
-export type SwarmKind = 'document' | 'sanction' | 'university'
+export type SwarmKind = 'document' | 'sanction' | 'university' | 'onboarding'
 
 export type LaneStatus = 'queued' | 'running' | 'done' | 'failed'
 

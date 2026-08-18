@@ -35,6 +35,7 @@ import {
 import { runJourneyResets } from '@/journeys/resetRegistry'
 import { gatesFor, mergeFields, verifyDeclared } from '@/lib/declared'
 import { docsFromRun, draftsFromRun, runSanctionSwarm } from '@/lib/agents/sanction'
+import { runOnboardingSwarm, verdictFrom } from '@/lib/agents/onboarding'
 import { POLICY } from '@/data/policy'
 import type { AgentResults } from '@/lib/agents/types'
 import type { FraudOutput, ValidationOutput } from '@/lib/agents/documents'
@@ -260,6 +261,14 @@ interface Actions {
     results: AgentResults,
     actor: JourneyActor,
   ) => void
+  /** §V3 — run the onboarding orchestrator over a file and record its verdict.
+   *  The verdict is what the S05 gate reads, so this is the verb that decides
+   *  whether a file can be handed to Credit. */
+  assessOnboarding: (appId: string, actor: JourneyActor) => void
+  /** §V3 — proceed past a `ready: false` verdict. Audited, and the override is
+   *  written onto the verdict itself so the file carries its own record of
+   *  having been pushed through. */
+  overrideOnboarding: (appId: string, reason: string) => void
   /** §Phase D item 5 — an officer approves one outreach draft, which sends it.
    *  Nothing the outreach agent writes leaves the bank without this call. */
   approveOutreachDraft: (appId: string, commId: string) => void
@@ -1539,6 +1548,53 @@ export const useStore = create<State & Actions>((set, get) => ({
       return true
     })
     pushToast('info', 'Tranche request queued for the bank. Release stays a bank action.')
+  },
+
+  assessOnboarding: (appId, actor) => {
+    const population = get().applications
+    mutate(set, appId, (app) => {
+      const results = runOnboardingSwarm(app, population)
+      const v = verdictFrom(results)
+      app.onboardingVerdict = {
+        ready: v.ready,
+        blockingReasons: v.blockingReasons,
+        headlines: Object.values(results).map((r) => ({ agent: r.agent, headline: r.headline })),
+        assessedAt: nowIso(),
+      }
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        verb: v.ready ? 'ONBOARDING CLEARED' : 'ONBOARDING HELD',
+        remarks: v.ready
+          ? 'Complete enough to hand to credit'
+          : v.blockingReasons.join(' · '),
+      })
+      return true
+    })
+  },
+
+  overrideOnboarding: (appId, reason) => {
+    const { role, pushToast } = get()
+    mutate(set, appId, (app) => {
+      const v = app.onboardingVerdict
+      if (!v || v.ready) {
+        pushToast('info', 'Nothing to override — this file is not being held.')
+        return false
+      }
+      // The verdict is NOT rewritten to ready. An override records that a person
+      // disagreed and proceeded; it does not retrospectively make the file
+      // complete, and the reviewer downstream should see both facts.
+      v.overriddenBy = officerOf(role)
+      v.overrideReason = reason
+      audit(app, {
+        actor: officerOf(role),
+        role,
+        verb: 'ONBOARDING OVERRIDDEN',
+        remarks: `Proceeded past ${v.blockingReasons.length} outstanding item(s) — ${reason}`,
+      })
+      return true
+    })
+    pushToast('info', 'Override recorded. The file can now move to credit.')
   },
 
   approveOutreachDraft: (appId, commId) => {

@@ -23,6 +23,106 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.2.0] — 2026-08-18
+
+**V3 Phase 2 — the customer onboarding orchestrator.** The first swarm that owns
+a phase rather than assisting one, and the first that can stop a file moving.
+
+### Added — `src/lib/agents/onboarding.ts`
+
+Four agents in parallel, all `internal`, every finding `audience: 'bank'`. A
+customer sees tasks; a readiness score is not a task.
+
+- **Minimum data** — learns what a file needs from what comparable files
+  actually had when a decision was reached, via `peersOf`. Deliberately not the
+  97-row checklist. It learns from files that got *far enough*, not files that
+  got *approved* — a declined file still demonstrates what a decidable one looks
+  like.
+- **Co-applicant fit** — two questions, not one: does the file need another
+  co-applicant, and is the existing one holding it back. The second is
+  arithmetic, not opinion: FOIR past `postMoratoriumDeviationMax` says a second
+  earner or a smaller ask is what moves the file, not more documents from the
+  same person.
+- **Enough to decide on** — the anti-goal agent. Fills a real hole:
+  `isResolved` in `lib/gating.ts` treats a validation that is *absent* from the
+  file as resolved, so today a file missing every check passes the gate as
+  cleanly as one that answered them all. Telling absence from
+  non-applicability is this agent's whole job.
+- **Scope check** — the guardrail, following the `/__dev/agents` probe pattern.
+
+Cohort claims carry `adequate | thin | absent` evidence, borrowed from the
+university brief. Below three closed comparables no rate is quoted at all — a
+percentage from n=2 is worse than saying nothing.
+
+### The anti-goal, enforced rather than intended
+
+`decision_sufficiency` is handed a `SufficiencyView` — the application with
+`decision`, `rejectionCode`, `outcome` and `pendingChecker` stripped. It cannot
+fit the mould of an approved loan because it cannot see whether one was
+approved. The guardrail proves it: the agent is run against the same file with
+the decision forced APPROVE and DECLINE, and all three outputs must be
+**byte-identical**.
+
+### Added — the S05 → S06 gate
+
+`GateFailure` gains `kind: 'onboarding'`. S05's exit is where
+`defaultDeptForStage` reassigns the file from Ops to Credit, so it is the
+handover in the data model. Verified end to end: **S05 → S06, Ops → Credit**.
+
+- **Absence of a verdict is not a failure.** A file never assessed is held by its
+  validations like any other; inventing a block for one the orchestrator has not
+  looked at would make every legacy file unmovable.
+- **The override does not rewrite the verdict.** `ready` stays false and
+  `overriddenBy` records who disagreed. The file moves; the record does not
+  pretend it was complete.
+- The override clears the *onboarding* gate only. APP-2605 still sits at S05 on
+  `VAL-INT-06` and `VAL-CRS-01` afterwards, which is correct — this orchestrator
+  owns readiness, not the validation catalogue.
+
+### Fixed
+
+- **The guardrail's own false positive, caught before it shipped.** The
+  credit-spillover pattern matched the bare words approve / decline / sanction
+  and failed four real files on the document label *"Approved / sanction plan
+  (BBMP / DDA / equivalent)"* — a building-plan approval for property
+  collateral. Not cosmetic: a guardrail breach makes `verdictFrom` hold the
+  file, so a false positive here blocks a handover. It now matches asserted
+  verdicts and identifiers, not vocabulary.
+
+### Changed
+
+- CJ-08 now persists the applicant's **city and PIN**, which it has always
+  collected and always discarded into a milestone remark. The only geography on
+  the model is the servicing branch, so a cohort agent asked where applicants
+  come from can currently only answer where the bank has offices. This does not
+  fix that today — no closed file has one — but it is the difference between the
+  gap closing over time and never closing.
+- New App-360 **Readiness** tab; new store verbs `assessOnboarding` and
+  `overrideOnboarding`, both audited.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Guardrail breaches across all 214 files | **0** |
+| Determinism · sufficiency independent of outcome · no credit spillover · no customer audience | all true |
+| Absent verdict does not block | true |
+| Gate holds a not-ready file at S05 | true — `moveForward` refused |
+| Override recorded, audited, and clears the gate | true |
+| Full handover | **S05 → S06, Ops → Credit** |
+| `tsc` · `build` · standalone · vocabulary scan | clean · clean · 0.93 MB · `leaks: []` |
+
+### Known / open
+
+- Readiness runs on demand from the console. It is not yet triggered
+  automatically as documents land, so a stale verdict is possible until
+  re-assessed.
+- The RM surface shows the onboarding failure through `evaluateGate` for free,
+  but has no dedicated panel.
+- The credit orchestrator (2.1–2.5) is designed but not built.
+
+---
+
 ## [2.1.0] — 2026-08-18
 
 **V3 groundwork.** Makes the seeded population causally consistent, so the

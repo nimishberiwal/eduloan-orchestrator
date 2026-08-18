@@ -544,6 +544,25 @@ export interface DocumentAgentCheck {
   blocking: boolean
 }
 
+// ---- Onboarding readiness (§V3) --------------------------------------------
+/** Whether a file is complete enough to leave collection and reach Credit.
+ *
+ *  `ready: false` holds the S05 → S06 exit. The gate is deliberately
+ *  OVERRIDABLE — `nonOverridable` is true only for S03 and S08 — so an officer
+ *  who disagrees can proceed and the override is audited. A readiness agent
+ *  that could strand a file with no human way out would be a worse failure than
+ *  the incompleteness it exists to catch. */
+export interface OnboardingVerdict {
+  ready: boolean
+  blockingReasons: string[]
+  /** Everything the four lanes concluded, for the console panel. */
+  headlines: { agent: string; headline: string }[]
+  assessedAt: string
+  /** Set when an officer proceeded past a `ready: false` verdict. */
+  overriddenBy?: string
+  overrideReason?: string
+}
+
 // ---- Generated papers (§Phase D) -------------------------------------------
 // The checklist `documents` are rows we COLLECT. These are artifacts we
 // PRODUCE. Conflating the two would put a paper the bank wrote onto the
@@ -649,6 +668,9 @@ export interface Application {
   /** §Phase F — what the document swarm found, per document. Optional, so the
    *  14 seed literals compile untouched. */
   agentChecks?: DocumentAgentCheck[]
+  /** §V3 — the onboarding orchestrator's readiness verdict. This is the one
+   *  thing the S05 gate reads. Optional like every other v5+ addition. */
+  onboardingVerdict?: OnboardingVerdict
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'
@@ -818,6 +840,7 @@ export type App360Tab =
   | 'extracted'
   | 'validations'
   | 'decision'
+  | 'onboarding'
   | 'papers'
   | 'covenants'
   | 'tranches'

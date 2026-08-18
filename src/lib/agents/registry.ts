@@ -100,6 +100,43 @@ export const AGENTS: AgentDef[] = [
     weight: 1.3,
   },
 
+  // --- the onboarding orchestrator (§V3) ------------------------------------
+  // All four are `internal`. This orchestrator is bank work: it decides whether
+  // a file is ready to leave collection, which is not a question the customer
+  // is being asked. They see tasks, never a readiness score.
+  {
+    id: 'minimum_data',
+    name: 'Minimum data',
+    what: 'Works out what this file actually needs, from what comparable files needed',
+    swarm: 'onboarding',
+    weight: 1.5,
+    internal: true,
+  },
+  {
+    id: 'co_applicant_fit',
+    name: 'Co-applicant fit',
+    what: 'Whether another co-applicant is needed, or the current one is holding the file back',
+    swarm: 'onboarding',
+    weight: 1.8,
+    internal: true,
+  },
+  {
+    id: 'decision_sufficiency',
+    name: 'Enough to decide on',
+    what: 'Whether a credit officer could reach a decision on what is on file',
+    swarm: 'onboarding',
+    weight: 1.25,
+    internal: true,
+  },
+  {
+    id: 'onboarding_guardrail',
+    name: 'Scope check',
+    what: 'Checks the other three stayed inside their remit and out of credit\u2019s',
+    swarm: 'onboarding',
+    weight: 1,
+    internal: true,
+  },
+
   // --- standalone ----------------------------------------------------------
   {
     id: 'university_intel',

@@ -94,6 +94,15 @@ export function Profile({ app }: { app: Application }) {
       { key: 'name', label: 'Full name', value: name, fromKey: 'name' },
       { key: 'dob', label: 'Date of birth', value: printedFromIso(dob), fromKey: 'dob' },
       { key: 'pan', label: 'PAN', value: pan.toUpperCase(), fromKey: 'pan' },
+      // §V3 — the applicant's own city and PIN, which this screen has always
+      // collected and always thrown away: they went into the milestone remark
+      // and nowhere else. The only geography on the data model is the SERVICING
+      // BRANCH, so a cohort agent asked about "where applicants come from" can
+      // currently only answer about where the bank has offices. Recording these
+      // does not fix that today — no closed file has one — but it is the
+      // difference between the gap closing over time and never closing.
+      { key: 'city', label: 'City', value: city },
+      { key: 'pin', label: 'PIN code', value: pin },
     ])
 
     milestone('PROFILE SUBMITTED', `${name.trim()} · PAN on file · ${city || pin}`, (a) => {
