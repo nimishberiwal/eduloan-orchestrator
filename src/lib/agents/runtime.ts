@@ -81,6 +81,36 @@ function enforceStagger(durations: number[]): number[] {
 /** Status lines for a lane, revealed in sequence. Deliberately concrete — "Reading
  *  page 1 of 2" tells a reviewer more than "Processing…". */
 const STEPS: Record<AgentId, string[]> = {
+  security_value: [
+    'Reading the instrument on file',
+    'Taking the assessed value',
+    'Applying the advance rate for that instrument',
+    'Stating what is realisable',
+  ],
+  title_search: [
+    'Reading the legal opinion',
+    'Walking the encumbrance record',
+    'Checking the tax receipts against the owner',
+    'Establishing situs',
+  ],
+  coverage: [
+    'Taking the realisable value as valued',
+    'Reading what is being asked for',
+    'Comparing the two',
+    'Measuring any shortfall',
+  ],
+  charge_perfection: [
+    'Reading the perfection status',
+    'Looking for a covenant carrying it',
+    'Separating documents held from charge created',
+    'Deciding whether S09 can be left',
+  ],
+  collateral_guardrail: [
+    'Valuing the security at two different asks',
+    'Comparing the two valuations',
+    'Marking every collateral document verified',
+    'Checking the charge verdict did not move',
+  ],
   lrs_aggregate: [
     'Reading every tranche on the schedule',
     'Adding the student and the parent together',

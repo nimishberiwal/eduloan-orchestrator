@@ -46,6 +46,12 @@ export type AgentId =
   | 'visa_gating'
   | 'fx_band'
   | 'disbursement_guardrail'
+  // --- the collateral orchestrator (§v5) ---
+  | 'security_value'
+  | 'title_search'
+  | 'coverage'
+  | 'charge_perfection'
+  | 'collateral_guardrail'
 
 export type SwarmKind =
   | 'document'
@@ -54,6 +60,7 @@ export type SwarmKind =
   | 'onboarding'
   | 'credit'
   | 'disbursement'
+  | 'collateral'
 
 export type LaneStatus = 'queued' | 'running' | 'done' | 'failed'
 

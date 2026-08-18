@@ -10,7 +10,7 @@ export interface GateFailure {
   id: string
   title: string
   message: string
-  kind: 'validation' | 'bucket' | 'checker' | 'covenant' | 'onboarding'
+  kind: 'validation' | 'bucket' | 'checker' | 'covenant' | 'onboarding' | 'collateral'
 }
 
 export interface GateEvaluation {
@@ -112,6 +112,35 @@ export function evaluateGate(app: Application): GateEvaluation | null {
           ? v.blockingReasons.join(' · ')
           : 'The onboarding assessment has not cleared this file.',
       kind: 'onboarding',
+    })
+  }
+
+  // S09 → S10: the collateral orchestrator's verdict (§v5).
+  //
+  // Conditional by construction — an unsecured file gets `applicable: false`
+  // and is never held here. The gate's own description allows an unperfected
+  // charge to leave S09 carried by COV-04, and the orchestrator honours that:
+  // what it blocks on is a shortfall, an adverse title, or a charge that is
+  // neither perfected nor carried.
+  //
+  // Same shape as S05: absence of a verdict is not a failure, and an override
+  // clears the gate WITHOUT rewriting the verdict.
+  if (
+    stage === 'S09' &&
+    app.collateralVerdict &&
+    app.collateralVerdict.applicable &&
+    !app.collateralVerdict.ready &&
+    !app.collateralVerdict.overriddenBy
+  ) {
+    const v = app.collateralVerdict
+    failures.push({
+      id: 'COLLATERAL',
+      title: 'The security does not stand up as it is',
+      message:
+        v.blockingReasons.length > 0
+          ? v.blockingReasons.join(' · ')
+          : 'The collateral assessment has not cleared this file.',
+      kind: 'collateral',
     })
   }
 

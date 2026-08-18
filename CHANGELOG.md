@@ -23,6 +23,118 @@ For a prototype, semver reads as:
 
 ---
 
+## [2.6.0] — 2026-08-19
+
+**The collateral orchestrator.** Five agents in `src/lib/agents/collateral.ts`,
+gating the S09 → S10 exit on secured files. S09 is conditional — Tier-3 only —
+it is the only stage that runs *alongside* others rather than after them, and it
+is the slowest closure path in the seed.
+
+### Two anti-goals, and both are old rules in a new domain
+
+**1. The valuation must not know the ask.** The oldest error in secured lending
+is not a bad valuation but a valuation that arrives at whatever number the loan
+needs. `security_value` receives a `SecurityView` = `Omit<Application, 'askInr'
+| 'creditAssessment' | 'decision' | 'rejectionCode' | 'outcome'>` and therefore
+cannot back-solve. **Exactly one agent sees the ask** — `coverage`, whose entire
+job is the comparison. Splitting the valuing from the comparing is what makes
+the property enforceable; the guardrail forces the ask to ₹10L and to ₹1Cr and
+requires the valuation to come back byte-identical.
+
+This is `decision_sufficiency` ⊥ outcome, moved one domain over.
+
+**2. Held is not perfected.** A deed in a folder is not a charge. The S09 gate
+says so in as many words — *"C4 perfection may remain as COV-04"* — so a file
+may be sanctioned with the mortgage unregistered, perfection deferred to a
+covenant cleared before first disbursement. `charge_perfection` reads
+`perfection_status` and **never** document presence; the guardrail forces every
+document on the file to `verified` and requires the verdict not to move.
+`c4DocsVerified` is reported and legitimately changes; `state`,
+`covenantCarrying` and `blocksS09` may not.
+
+This is "absence is not compliance" inverted: there, a missing validation is not
+a passed one; here, a document on file is not a charge created.
+
+Both tests are guarded by `controlsLive`, which asserts the ask genuinely
+differs in the raw record and that only `securityView` neutralises it.
+
+### Not applicable is not a pass
+
+Two of the four title checks are meaningless on a lien-marked deposit: a fixed
+deposit has no encumbrance certificate and no property tax. `TitleCheck.passed`
+is `boolean | null`, and `null` is reported as *not applicable* rather than
+folded into either column. An unsecured file gets `applicable: false` from the
+verdict rather than a clean bill of health — **no security is not the same as
+good security**.
+
+### Fixed — REJ-05 rested on nothing
+
+98 files carry `securedConstruct`, a collateral-provider party and the C1–C4
+buckets. **Exactly three carried any collateral data**, all hand-written in
+`seed.ts`. So `REJ-05` — *"Collateral shortfall / legal not clear"* — was being
+written onto files whose collateral was never described: the same defect class
+as the original `rng.pick(REJ_CODES)`, one layer down.
+
+Secured files now carry an instrument, a valuation, a legal opinion, encumbrance
+and tax status and a perfection state, all derived. The advance rate comes from
+`POLICY.ltvPolicy` per instrument, and **all 3 REJ-05 files are now genuinely
+short or adverse on title**.
+
+Two knock-on effects worth noting: `policy_fit`'s LTV tests were reporting
+`unassessable` on nearly every secured file for want of a valuation to assess —
+book-wide `unassessable` falls from 542 to 449 and `outside` rises from 308 to
+334. And `covenants: []` on all 200 bulk files meant COV-04 never existed, so
+the gate's own allowance could never be exercised: every secured file at S09 was
+held for an uncarried charge and the legitimate path was invisible. COV-04 is
+now raised on most secured files from S09, absent on a minority.
+
+### Fixed — a premature block, caught by its own numbers
+
+The first cut held **69 of 98** secured files on *"charge neither perfected nor
+carried"*, including files at S03 and S04. A charge is created at C4, which is
+`requiredByStage: 'disbursement_t1'` — a file at S04 has none for entirely
+correct reasons, and blocking it is the mirror of the error the onboarding agent
+exists to catch. Perfection now only binds from S09 onward. Held falls to 18,
+across five distinct reasons.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` · `npm run build` · standalone | clean · clean · 0.99 MB |
+| `scan-vocabulary` | `leaks: []` |
+| Applications | 214, unchanged |
+| **Curated 14 byte-identical** | `sha256 f00319c0…4aa227`, unchanged since `2.3.1` |
+| Secured files | 98 · 94 with generated security · 80 clear, 18 held |
+| Guardrail breaches | 0 / 214 — including all 116 unsecured, where there is no security to read |
+| Valuation ⊥ ask | 24 / 24 byte-identical at ₹10L and ₹1Cr |
+| Held ≠ perfected | 24 / 24 — verdict unmoved with every document forced to `verified` |
+| Controls live | 24 / 24 |
+| Unsecured files reporting `applicable: true` | **0 / 116** |
+| Determinism | 0 non-deterministic / 214 |
+| **REJ-05 justified by the file's own collateral** | **3 / 3** |
+| S09 gate walk | APP-2730 (COV-04 removed) → `COLLATERAL HELD` → `moveForward` refused, *1 gate item failing* → `COLLATERAL OVERRIDDEN` audited, verdict still `ready: false` → advances **S09 → S10** |
+| `resetDemo` | clears the verdict, restores COV-04 |
+| Prior invariants | closure/history 0 · onboarding, credit, sufficiency, independence and disbursement probes all unchanged |
+
+### Known / open
+
+- **`coverage` reports `unassessable` on 5 curated secured files** whose
+  `technical_value_inr` is seeded as `awaited`. That is the honest answer —
+  absence is not a shortfall and not a pass — but it means those files are held
+  on a missing figure rather than a finding.
+- **Situs is true by construction.** Every instrument this product accepts is
+  Indian-situs, so `VAL-EXT-15` cannot currently fail. It is computed rather
+  than assumed, and would bind if a foreign asset were ever offered.
+- **The collateral provider's own portal is unchanged.** A shortfall on a
+  parent's property is a conversation an officer has; all five agents are
+  `internal` and nothing reaches `/security/:token`.
+- The `sanction` swarm still has no `/__dev/agents` section — now the oldest
+  harness debt.
+- S03 KYC and S12 documentation still have no agent.
+
+---
+
 ## [2.5.0] — 2026-08-19
 
 **The disbursement gating orchestrator.** The third orchestrator, and the only

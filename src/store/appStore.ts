@@ -37,6 +37,7 @@ import { gatesFor, mergeFields, verifyDeclared } from '@/lib/declared'
 import { docsFromRun, draftsFromRun, runSanctionSwarm } from '@/lib/agents/sanction'
 import { runOnboardingSwarm, verdictFrom } from '@/lib/agents/onboarding'
 import { runCreditSwarm, summariseCredit } from '@/lib/agents/credit'
+import { collateralVerdictFrom, runCollateralSwarm } from '@/lib/agents/collateral'
 import {
   disbursementVerdictFrom,
   isOverridable,
@@ -279,6 +280,12 @@ interface Actions {
   /** §v5 — run the credit orchestrator over a file and record its position.
    *  Does NOT decide: `finalDecision` remains the only write to `app.decision`. */
   assessCredit: (appId: string, actor: JourneyActor) => void
+  /** §v5 — run the collateral orchestrator over a secured file's security.
+   *  Records a verdict; the S09 gate reads it. */
+  assessCollateral: (appId: string, actor: JourneyActor) => void
+  /** §v5 — proceed past a `ready: false` collateral verdict. Audited, and the
+   *  verdict is not rewritten. */
+  overrideCollateral: (appId: string, reason: string) => void
   /** §v5 — run the disbursement orchestrator over a file's tranche schedule.
    *  Does NOT release: `releaseTranche`/`countersignTranche` under maker-checker
    *  remain the only path to money. */
@@ -1644,6 +1651,63 @@ export const useStore = create<State & Actions>((set, get) => ({
       })
       return true
     })
+  },
+
+  assessCollateral: (appId, actor) => {
+    mutate(set, appId, (app) => {
+      const results = runCollateralSwarm(app)
+      const v = collateralVerdictFrom(app, results)
+      app.collateralVerdict = {
+        ...v,
+        assessedAt: nowIso(),
+        // An override survives a re-run, exactly as at S05 — it is a human act
+        // with a timestamp, and re-running the agents must not erase it.
+        overriddenBy: app.collateralVerdict?.overriddenBy,
+        overrideReason: app.collateralVerdict?.overrideReason,
+      }
+      audit(app, {
+        actor: actorName(actor),
+        role: actorAuditRole(actor),
+        verb: !v.applicable
+          ? 'COLLATERAL NOT APPLICABLE'
+          : v.ready
+            ? 'COLLATERAL CLEARED'
+            : 'COLLATERAL HELD',
+        remarks: !v.applicable
+          ? 'Unsecured construct — no security to assess'
+          : v.ready
+            ? `${v.instrument ?? 'Security'} · ₹${(v.realisableInr ?? 0).toLocaleString('en-IN')} realisable · ${v.coverPct ?? '—'}% of the ask`
+            : v.blockingReasons.join(' · '),
+      })
+      return true
+    })
+  },
+
+  overrideCollateral: (appId, reason) => {
+    const { role, pushToast } = get()
+    if (!reason.trim()) {
+      pushToast('error', 'An override needs a reason.')
+      return
+    }
+    mutate(set, appId, (app) => {
+      const v = app.collateralVerdict
+      if (!v || v.ready || !v.applicable) {
+        pushToast('info', 'Nothing to override — this file is not being held on collateral.')
+        return false
+      }
+      // Not rewritten to ready, for the reason `overrideOnboarding` gives: the
+      // record should carry both the shortfall and the decision to proceed.
+      v.overriddenBy = officerOf(role)
+      v.overrideReason = reason.trim()
+      audit(app, {
+        actor: officerOf(role),
+        role,
+        verb: 'COLLATERAL OVERRIDDEN',
+        remarks: `Proceeded past ${v.blockingReasons.length} finding(s) on the security — ${reason.trim()}`,
+      })
+      return true
+    })
+    pushToast('info', 'Override recorded. The file can now move to credit decision.')
   },
 
   assessDisbursement: (appId, actor) => {

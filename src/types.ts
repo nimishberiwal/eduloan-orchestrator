@@ -366,6 +366,24 @@ export interface TrancheGateOverride {
   at: string
 }
 
+/** §v5 — what the collateral orchestrator concluded about the security. */
+export interface CollateralVerdict {
+  /** Unsecured files get `applicable: false` rather than a clean bill of
+   *  health — there is no security, which is not the same as good security. */
+  applicable: boolean
+  ready: boolean
+  blockingReasons: string[]
+  instrument: string | null
+  realisableInr: number | null
+  coverPct: number | null
+  perfection: string
+  headlines: { agent: string; headline: string }[]
+  assessedAt: string
+  /** Set when an officer proceeded past a `ready: false` verdict. */
+  overriddenBy?: string
+  overrideReason?: string
+}
+
 export interface DisbursementVerdict {
   tranches: TrancheVerdict[]
   lrsHeadroomUsd: number
@@ -741,6 +759,8 @@ export interface Application {
   creditAssessment?: CreditAssessment
   /** §v5 — the disbursement orchestrator's per-tranche gating verdict. */
   disbursementVerdict?: DisbursementVerdict
+  /** §v5 — the collateral orchestrator's verdict. Secured files only. */
+  collateralVerdict?: CollateralVerdict
 }
 
 export type LaneNode = 'kyc' | 'docs' | 'verification' | 'bureau' | 'c1' | 'c2' | 'c3' | 'c4'
@@ -912,6 +932,7 @@ export type App360Tab =
   | 'decision'
   | 'onboarding'
   | 'credit'
+  | 'collateral'
   | 'papers'
   | 'covenants'
   | 'tranches'

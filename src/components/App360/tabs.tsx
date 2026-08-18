@@ -1343,3 +1343,115 @@ function TrancheOverride({
     </div>
   )
 }
+
+// ---- Security — the collateral orchestrator (§v5) ---------------------------
+export function CollateralTab({ app }: { app: Application }) {
+  const assess = useStore((s) => s.assessCollateral)
+  const override = useStore((s) => s.overrideCollateral)
+  const [reason, setReason] = useState('')
+  const v = app.collateralVerdict
+
+  if (!app.securedConstruct) {
+    return (
+      <EmptyState>
+        Unsecured construct — the ask sits inside the premier overlay ceiling, so there is no
+        security to assess. That is not the same as good security, and the orchestrator records it
+        as <code>applicable: false</code> rather than as a pass.
+      </EmptyState>
+    )
+  }
+
+  if (!v) {
+    return (
+      <div className="rounded-xl border border-[var(--line)] bg-white p-4 shadow-card">
+        <div className="text-13 text-slate-600">
+          Four agents read the security. The one that values it is handed the file with{' '}
+          <code>askInr</code> removed, so it cannot arrive at whatever number the loan needs — only
+          the coverage agent sees the ask, and its whole job is the comparison.
+        </div>
+        <button
+          className="mt-3 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-12 font-semibold text-white"
+          onClick={() => assess(app.appId, { kind: 'system', sessionId: 'SYS' })}
+        >
+          Assess the security
+        </button>
+      </div>
+    )
+  }
+
+  const held = !v.ready && !v.overriddenBy
+  return (
+    <div className="space-y-3">
+      <div
+        className={`rounded-xl border p-4 shadow-card ${
+          v.ready ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-slate-700">
+            {v.ready ? 'The security stands up' : 'The security does not stand up as it is'}
+          </span>
+          <Chip tone={v.ready ? 'green' : 'amber'}>{v.ready ? 'clear' : 'held at S09'}</Chip>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-[12px] text-slate-600 sm:grid-cols-4">
+          <div><span className="text-slate-400">Instrument</span><div className="font-semibold">{v.instrument ?? '—'}</div></div>
+          <div><span className="text-slate-400">Realisable</span><div className="font-semibold">{v.realisableInr !== null ? inr(v.realisableInr) : '—'}</div></div>
+          <div><span className="text-slate-400">Cover</span><div className="font-semibold">{v.coverPct !== null ? `${v.coverPct}%` : '—'}</div></div>
+          <div><span className="text-slate-400">Charge</span><div className="font-semibold">{v.perfection.replace(/_/g, ' ')}</div></div>
+        </div>
+        {v.overriddenBy && (
+          <div className="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-[11px] text-amber-800">
+            Overridden by {v.overriddenBy} — “{v.overrideReason}”. The verdict is unchanged: the
+            file moved, the record does not pretend the security was sound.
+          </div>
+        )}
+      </div>
+
+      {v.blockingReasons.length > 0 && (
+        <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">What is holding it</div>
+          <ul className="space-y-1 text-[12px] text-slate-700">
+            {v.blockingReasons.map((r) => (<li key={r}>· {r}</li>))}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">Lanes</div>
+        <ul className="space-y-1 text-[12px] text-slate-600">
+          {v.headlines.map((h) => (
+            <li key={h.agent}>
+              <span className="font-semibold text-slate-700">{AGENT_BY_ID[h.agent as keyof typeof AGENT_BY_ID]?.name ?? h.agent}</span> — {h.headline}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {held && (
+        <div className="rounded-xl border border-[var(--line)] bg-white p-3 shadow-card">
+          <div className="mb-1 text-[11px] text-slate-600">
+            Proceeding past this is an officer's call and is recorded as one.
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why proceed to credit decision with the security as it stands?"
+              className="flex-1 rounded border border-[var(--line)] px-2 py-1 text-[12px]"
+            />
+            <Btn size="sm" disabled={!reason.trim()} onClick={() => { override(app.appId, reason); setReason('') }}>
+              Override
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      <button
+        className="text-[11px] text-blue-700 underline"
+        onClick={() => assess(app.appId, { kind: 'system', sessionId: 'SYS' })}
+      >
+        Re-assess
+      </button>
+    </div>
+  )
+}

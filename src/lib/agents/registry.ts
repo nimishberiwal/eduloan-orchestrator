@@ -224,6 +224,51 @@ export const AGENTS: AgentDef[] = [
     internal: true,
   },
 
+  // --- the collateral orchestrator (§v5) -------------------------------------
+  // All five are `internal`. The collateral provider is often a parent, and a
+  // shortfall on their property is a conversation an officer has, not a number
+  // a portal shows them.
+  {
+    id: 'security_value',
+    name: 'Valuing the security',
+    what: 'What the asset is worth and what the bank could lend against it',
+    swarm: 'collateral',
+    weight: 1.7,
+    internal: true,
+  },
+  {
+    id: 'title_search',
+    name: 'Title and encumbrance',
+    what: 'The legal opinion, the encumbrance record and the tax receipts',
+    swarm: 'collateral',
+    weight: 1.9,
+    internal: true,
+  },
+  {
+    id: 'coverage',
+    name: 'Cover against the ask',
+    what: 'Whether the realisable value reaches what is being asked for',
+    swarm: 'collateral',
+    weight: 1.15,
+    internal: true,
+  },
+  {
+    id: 'charge_perfection',
+    name: 'Charge status',
+    what: 'Whether a charge exists, and whether anything carries it if not',
+    swarm: 'collateral',
+    weight: 1.3,
+    internal: true,
+  },
+  {
+    id: 'collateral_guardrail',
+    name: 'Valuation check',
+    what: 'Checks the valuation never saw the ask, and a deed was not read as a charge',
+    swarm: 'collateral',
+    weight: 1,
+    internal: true,
+  },
+
   // --- standalone ----------------------------------------------------------
   {
     id: 'university_intel',

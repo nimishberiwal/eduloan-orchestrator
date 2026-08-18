@@ -47,6 +47,11 @@ import {
   type DisbursementGuardrailOutput,
   type LrsOutput,
 } from '@/lib/agents/disbursement'
+import {
+  collateralVerdictFrom,
+  runCollateralSwarm,
+  type CollateralGuardrailOutput,
+} from '@/lib/agents/collateral'
 import { POLICY } from '@/data/policy'
 import {
   runCreditGuardrail,
@@ -221,6 +226,10 @@ export function AgentInspector() {
       {/* Whole book — only ~15 files reach disbursement, and none of the
           curated 14 but APP-2612. */}
       <DisbursementSection book={apps} />
+
+      {/* Whole book — 98 secured files, and the guardrail runs on the
+          unsecured ones too. */}
+      <CollateralSection book={apps} />
 
       <UniversitySection apps={curated} />
       {/* Fed from EVERY application, not the curated 14 — the point is to see
@@ -1417,6 +1426,172 @@ function DisbursementSection({ book }: { book: Application[] }) {
         product ceiling moves, and the LRS figure it reports is the applicant’s remaining headroom
         for the year. What it cannot see — remittances made through another bank in the same
         financial year — it says so rather than implying the cap is clear.
+      </p>
+    </>
+  )
+}
+
+// ============================================================================
+// The collateral orchestrator (§v5).
+//
+// Two anti-goals, and both are the same shape as ones already in this file —
+// which is the point. The vocabulary generalises.
+//
+//   VALUATION ⊥ ASK is `decision_sufficiency` ⊥ outcome, moved one domain over.
+//   Sufficiency must not be shaped by whether the file was approved; a
+//   valuation must not be shaped by what the loan needs it to be. Both are
+//   enforced by a stripped view and proven byte-identical under a forced input.
+//
+//   HELD ≠ PERFECTED is the "absence is not compliance" rule inverted. There it
+//   was: a missing validation is not a passed one. Here it is: a document on
+//   file is not a charge created. A deed in a folder secures nothing.
+//
+// Both tests are only worth running if their forced inputs genuinely differ, so
+// `controlsLive` asserts the ask really changes in the raw record and that only
+// `securityView` neutralises it — the same check the onboarding section makes.
+// ============================================================================
+
+interface ColProbe {
+  appId: string
+  stage: string
+  applicable: boolean
+  instrument: string | null
+  coverPct: number | null
+  perfection: string
+  ready: boolean
+  blocking: number
+  deterministic: boolean
+  valuationIndependentOfAsk: boolean
+  perfectionIgnoresDocuments: boolean
+  controlsLive: boolean
+  noWriteBack: boolean
+  offences: string[]
+}
+
+function probeCollateral(app: Application): ColProbe {
+  const results = runCollateralSwarm(app)
+  const guard = results.collateral_guardrail?.output as CollateralGuardrailOutput
+  const v = collateralVerdictFrom(app, results)
+  return {
+    appId: app.appId,
+    stage: String(app.stage),
+    applicable: v.applicable,
+    instrument: v.instrument,
+    coverPct: v.coverPct,
+    perfection: v.perfection,
+    ready: v.ready,
+    blocking: v.blockingReasons.length,
+    deterministic: guard.deterministic,
+    valuationIndependentOfAsk: guard.valuationIndependentOfAsk,
+    perfectionIgnoresDocuments: guard.perfectionIgnoresDocuments,
+    controlsLive: guard.controlsLive,
+    noWriteBack: guard.noWriteBack,
+    offences: guard.offences,
+  }
+}
+
+function CollateralSection({ book }: { book: Application[] }) {
+  const secured = useMemo(() => book.filter((a) => a.securedConstruct), [book])
+  // A sample, because 98 files × 5 agents on every render is the one place this
+  // harness could become slow enough to be annoying.
+  const rows = useMemo(() => secured.slice(0, 24).map(probeCollateral), [secured])
+  // The guardrail still runs on ALL of them, plus the 116 unsecured — an agent
+  // that divides by zero on a file with no security would be a defect no
+  // secured row could surface.
+  const allClean = useMemo(
+    () =>
+      book.every(
+        (a) => (runCollateralSwarm(a).collateral_guardrail?.output as CollateralGuardrailOutput).offences.length === 0,
+      ),
+    [book],
+  )
+  const unsecuredMisreported = useMemo(
+    () =>
+      book.filter(
+        (a) => !a.securedConstruct && collateralVerdictFrom(a, runCollateralSwarm(a)).applicable,
+      ).length,
+    [book],
+  )
+
+  const ok = (f: (r: ColProbe) => boolean) => rows.length > 0 && rows.every(f)
+
+  return (
+    <>
+      <h2 className="mb-2 mt-6 text-[14px] font-bold">
+        collateral orchestrator (§v5) — anti-goals: the valuation never sees the ask · held is not perfected
+      </h2>
+      <section
+        className={`mb-3 rounded border p-3 ${
+          allClean && unsecuredMisreported === 0 ? 'border-emerald-300 bg-emerald-50' : 'border-red-300 bg-red-50'
+        }`}
+      >
+        <Banner ok={ok((r) => r.valuationIndependentOfAsk)}>
+          <strong>Valuation ⊥ ask</strong> — the ask is forced to ₹10L and to ₹1Cr and the valuation
+          plus title search must come back byte-identical, on{' '}
+          {rows.filter((r) => r.valuationIndependentOfAsk).length}/{rows.length}. A valuer who can
+          see the loan arrives at the loan.
+        </Banner>
+        <Banner ok={ok((r) => r.perfectionIgnoresDocuments)}>
+          <strong>Held is not perfected</strong> — every document on the file is forced to{' '}
+          <code>verified</code> and the charge verdict must not move. <code>c4DocsVerified</code> is
+          reported and legitimately changes; <code>state</code>, <code>covenantCarrying</code> and{' '}
+          <code>blocksS09</code> may not.
+        </Banner>
+        <Banner ok={ok((r) => r.controlsLive)}>
+          <strong>Controls are live</strong> — the ask genuinely differs in the raw record and only{' '}
+          <code>securityView</code> neutralises it. Without this the two tests above compare
+          identical objects and pass on anything.
+        </Banner>
+        <Banner ok={unsecuredMisreported === 0}>
+          <strong>Unsecured files are not given a clean bill</strong> — {unsecuredMisreported} of the{' '}
+          {book.length - secured.length} unsecured files report <code>applicable: true</code>. No
+          security is not the same as good security.
+        </Banner>
+        <Banner ok={allClean}>
+          <strong>Determinism and purity on all {book.length} files</strong> — including every
+          unsecured one, where there is no security to read
+        </Banner>
+      </section>
+
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="bg-slate-100">
+            {['app', 'stage', 'instrument', 'cover', 'charge', 'verdict', 'blocking', 'val ⊥ ask', 'held≠perfected', 'controls live', 'pure', 'offences'].map((h) => (
+              <th key={h} className="border border-slate-200 px-2 py-1 font-semibold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.appId} className="odd:bg-white even:bg-slate-50">
+              <td className="border border-slate-200 px-2 py-1">{r.appId}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.stage}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.instrument ?? <span className="text-slate-400">—</span>}</td>
+              <td className={`border border-slate-200 px-2 py-1 ${r.coverPct !== null && r.coverPct < 100 ? 'font-bold text-red-700' : ''}`}>
+                {r.coverPct !== null ? `${r.coverPct}%` : <span className="text-slate-400">n/a</span>}
+              </td>
+              <td className="border border-slate-200 px-2 py-1">{r.perfection.replace(/_/g, ' ')}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.ready ? 'clear' : 'held'}</td>
+              <td className="border border-slate-200 px-2 py-1">{r.blocking}</td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.valuationIndependentOfAsk} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.perfectionIgnoresDocuments} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.controlsLive} /></td>
+              <td className="border border-slate-200 px-2 py-1"><Yn ok={r.noWriteBack} /></td>
+              <td className="border border-slate-200 px-2 py-1 text-red-700">
+                {r.offences.length === 0 ? <span className="text-slate-400">—</span> : r.offences.join(' · ')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 max-w-[100ch] text-slate-600">
+        First {rows.length} of {secured.length} secured files shown; the guardrail runs on all{' '}
+        {book.length}. <strong>“charge” reads <code>pending</code> on most rows and that is
+        correct</strong> — a charge is created at C4, which is{' '}
+        <code>requiredByStage: 'disbursement_t1'</code>, so a file at S04 has none for entirely
+        good reasons. Perfection only holds a file from S09 onward, and even then the gate lets an
+        unperfected charge leave when COV-04 carries it to first disbursement. Blocking earlier
+        would be the mirror of the error the onboarding agent exists to catch.
       </p>
     </>
   )

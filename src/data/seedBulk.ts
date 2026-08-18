@@ -16,12 +16,14 @@ import type {
   BlockerKind,
   Channel,
   ClosureKind,
+  Covenant,
   DocumentItem,
   Intake,
   Outcome,
   RoleId,
   Stage,
   StageId,
+  ExtractedField,
   Status,
   Tier,
   Tranche,
@@ -32,6 +34,7 @@ import { ACTIVE_VALIDATIONS } from '@/data/validations'
 import { generateBuckets, generateDocuments } from '@/data/buckets'
 import { BRANCHES, OFFICERS, officersOf } from '@/data/org'
 import { CODE_LABEL, EXP_CODES, REJ_CODES, WD_CODES } from '@/data/reasonCodes'
+import { COV_DEFS } from '@/data/covenants'
 import { POLICY } from '@/data/policy'
 import { STAGES } from '@/data/stages'
 import { defaultDeptForStage } from '@/lib/stateMachine'
@@ -387,6 +390,113 @@ function buildTranches(appId: string, askInr: number, rank: number): Tranche[] {
   })
 }
 
+
+/** §v5 — the collateral facts a secured file is supposed to carry.
+ *
+ *  98 files carry `securedConstruct`, a collateral-provider party and the C1–C4
+ *  buckets. Exactly THREE carried any collateral data, all of them hand-written
+ *  in `seed.ts`. So `REJ-05` — "Collateral shortfall / legal not clear" — was
+ *  being written onto files whose collateral was never described: the same
+ *  defect class as the original `rng.pick(REJ_CODES)`, one layer down. A
+ *  shortfall rejection now has a shortfall to rest on.
+ *
+ *  Private RNG stream seeded from the id, for the reason `buildTranches`
+ *  documents: drawing from the shared one re-rolls every application generated
+ *  afterwards. */
+function buildCollateral(
+  appId: string,
+  askInr: number,
+  rank: number,
+  shortfallCause: boolean,
+): ExtractedField[] {
+  const rng = makeRng(hashSeed(`${appId}-COL`))
+
+  // Instrument decides the LTV, and the LTV decides what "enough" means. The
+  // BRD lists each separately because each has its own issuer and lien
+  // mechanism; the policy gives each its own advance rate.
+  const type = rng.weighted([
+    ['Immovable', 68],
+    ['FD', 14],
+    ['LIC', 10],
+    ['MF', 8],
+  ] as const)
+  const ltvPct = Number(POLICY.ltvPolicy[type] ?? 70)
+
+  // The value the security must reach for the ask to be covered.
+  const required = Math.round(askInr / (ltvPct / 100))
+
+  // A file rejected FOR a collateral shortfall must actually be short. Every
+  // other secured file clears, with a realistic spread above the line.
+  const ratio = shortfallCause
+    ? rng.pick([0.58, 0.66, 0.71, 0.79])
+    : rng.pick([1.04, 1.12, 1.19, 1.28, 1.41, 1.63])
+  const technicalValue = Math.round(required * ratio)
+
+  // Legal opinion: a shortfall cause covers "legal not clear" too, so a slice of
+  // those are adverse on title rather than short on value.
+  const legalAdverse = shortfallCause && rng.chance(0.3)
+  const legalOpinion = legalAdverse
+    ? rng.pick(['Adverse — chain of title broken', 'Adverse — encumbrance subsisting'])
+    : rng.chance(0.12)
+      ? 'Clear with conditions'
+      : 'Clear'
+
+  // Encumbrance continuity and tax receipts are only meaningful on immovable
+  // property. A lien-marked FD has neither, and reporting them as failures
+  // would be the "absence is not compliance" error in reverse.
+  const immovable = type === 'Immovable'
+  const ecContinuous = immovable ? !legalAdverse && !rng.chance(0.08) : true
+  const taxCurrent = immovable ? !rng.chance(0.14) : true
+
+  // HELD is not PERFECTED. A charge can be equitable-but-unregistered, or ride
+  // to first disbursement as COV-04 — the S09 gate says so in as many words.
+  const perfection =
+    rank >= 13
+      ? 'Perfected'
+      : rank >= 11
+        ? rng.pick(['Perfected', 'Equitable — not registered'])
+        : 'Pending'
+
+  return [
+    ef('collateral', 'Collateral', 'collateral_type', type, type),
+    ef('collateral', 'Collateral', 'technical_value_inr', `₹${technicalValue.toLocaleString('en-IN')}`, `₹${technicalValue.toLocaleString('en-IN')}`, rank >= 9 ? 'pass' : 'pending'),
+    ef('collateral', 'Collateral', 'ltv_pct', `≤${ltvPct}`, String(ltvPct), 'pass', true),
+    ef('collateral', 'Collateral', 'legal_opinion', legalOpinion, legalOpinion, legalOpinion.startsWith('Adverse') ? 'fail' : 'pass'),
+    ef('collateral', 'Collateral', 'encumbrance_continuous', 'Yes', ecContinuous ? 'Yes' : 'No', ecContinuous ? 'pass' : 'fail'),
+    ef('collateral', 'Collateral', 'property_tax_current', 'Yes', taxCurrent ? 'Yes' : 'No', taxCurrent ? 'pass' : 'fail'),
+    ef('collateral', 'Collateral', 'perfection_status', perfection, perfection, perfection === 'Perfected' ? 'pass' : 'pending'),
+  ]
+}
+
+
+/** §v5 — COV-04, the covenant that carries mortgage perfection to first
+ *  disbursement.
+ *
+ *  All 200 bulk files had `covenants: []`, so the S09 gate's own allowance —
+ *  "C4 perfection may remain as COV-04" — could never be exercised on generated
+ *  data: every secured file at S09 was held for an uncarried charge and the
+ *  legitimate path was invisible. Raised at S09, which is when an officer
+ *  actually decides to defer perfection rather than wait for it. */
+function buildCovenants(appId: string, rank: number, secured: boolean, raisedAt: string): Covenant[] {
+  if (!secured || rank < 9) return []
+  const rng = makeRng(hashSeed(`${appId}-COV`))
+  // Most files take the covenant; a minority leave S09 with the charge neither
+  // perfected nor carried, which is the finding worth surfacing.
+  if (rng.chance(0.22)) return []
+  const def = COV_DEFS.find((d) => d.id === 'COV-04')
+  if (!def) return []
+  return [
+    {
+      id: `${appId}-COV04`,
+      defId: 'COV-04',
+      title: def.title,
+      raisedAt,
+      clearBy: def.clearBy,
+      status: rank >= 13 ? 'cleared' : 'open',
+    },
+  ]
+}
+
 // ---- Generator -------------------------------------------------------------
 export interface BulkSeedOptions {
   count?: number
@@ -697,10 +807,17 @@ function makeApp(i: number, rng: Rng): Application {
         foirPct <= POLICY.foirPolicy.postMoratoriumPassMax ? 'pass' : 'fail',
         true,
       ),
+      // §v5 — a secured file describes its security. `cause?.needsSecured` is
+      // the REJ-05 flag, so a collateral-shortfall rejection rests on a real
+      // shortfall rather than on nothing at all.
+      ...(securedConstruct
+        ? buildCollateral(appId, askInr, rank, cause?.needsSecured === true)
+        : []),
     ],
     validations,
     deviations,
-    covenants: [],
+    // §v5 — see `buildCovenants`.
+    covenants: buildCovenants(appId, rank, securedConstruct, stageEnteredAt),
     // §v5 — only files that actually reached disbursement carry a schedule.
     //
     // Named stages, NOT `rank >= 13`: `stageRank` returns 99 for every terminal

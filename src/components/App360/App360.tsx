@@ -16,7 +16,7 @@ import { JourneyTimeline } from './JourneyTimeline'
 import { PeerPanel } from './PeerPanel'
 import { ConsentsPanel } from './ConsentsPanel'
 import {
-  AuditTab, CommsTab, CovenantsTab, CreditTab, DecisionTab, DocumentsTab, ExtractedTab,
+  AuditTab, CollateralTab, CommsTab, CovenantsTab, CreditTab, DecisionTab, DocumentsTab, ExtractedTab,
   IntegrationsTab, NotesTab, OnboardingTab, PapersTab, TranchesTab, UniversityTab, ValidationsTab,
 } from './tabs'
 
@@ -26,6 +26,7 @@ const TABS: { id: App360Tab; label: string }[] = [
   { id: 'validations', label: 'Validations' },
   { id: 'onboarding', label: 'Readiness' },
   { id: 'credit', label: 'Credit assessment' },
+  { id: 'collateral', label: 'Security' },
   { id: 'decision', label: 'Decision (CAM-lite)' },
   { id: 'papers', label: 'Sanction pack' },
   { id: 'covenants', label: 'Covenants' },
@@ -118,6 +119,7 @@ function TabContent({ app, tab }: { app: Application; tab: App360Tab }) {
     case 'validations': return <ValidationsTab app={app} />
     case 'onboarding': return <OnboardingTab app={app} />
     case 'credit': return <CreditTab app={app} />
+    case 'collateral': return <CollateralTab app={app} />
     case 'decision': return <DecisionTab app={app} />
     case 'papers': return <PapersTab app={app} />
     case 'covenants': return <CovenantsTab app={app} />

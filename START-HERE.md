@@ -7,10 +7,10 @@ what to read before touching anything.
 | | |
 |---|---|
 | **Repo** | `~/Downloads/PythonProject/eduloan-orchestrator` |
-| **Version** | `v2.5.0` — `package.json` and the tag agree |
-| **Git** | clean, level with `origin/main`, 11 tags and 11 GitHub Releases |
-| **Last commit** | `v2.5.0` The disbursement gating orchestrator |
-| **Written** | 2026-08-18, revised 2026-08-19 for `v2.4.0`–`v2.5.0` |
+| **Version** | `v2.6.0` — `package.json` and the tag agree |
+| **Git** | clean, level with `origin/main`, 12 tags and 12 GitHub Releases |
+| **Last commit** | `v2.6.0` The collateral orchestrator |
+| **Written** | 2026-08-18, revised 2026-08-19 for `v2.4.0`–`v2.6.0` |
 
 ## What it is
 
@@ -95,8 +95,9 @@ action, hand it to the customer.
 gated so no money moves until evidenced; a university intelligence corpus.
 
 *Wave 2, orchestrators that own a phase and can stop a file. There are now
-**three**, and the third repeats — onboarding runs once at S05 and credit once
-around S06/S07, but disbursement runs on every tranche of every file:*
+**four**. Onboarding runs once at S05 and credit once around S06/S07;
+disbursement runs on every tranche of every file; collateral is conditional and
+runs only on the 98 secured ones:*
 
 | Swarm | Agents | |
 |---|---|---|
@@ -106,9 +107,10 @@ around S06/S07, but disbursement runs on every tranche of every file:*
 | `onboarding` | 4 | minimum_data · co_applicant_fit · **decision_sufficiency** · onboarding_guardrail |
 | `credit` | 5 | **fresh_assessment** · geography_cohort · college_cohort · policy_fit · credit_guardrail |
 | `disbursement` | 5 | **lrs_aggregate** · fema_compliance · visa_gating · fx_band · disbursement_guardrail |
+| `collateral` | 5 | **security_value** · title_search · coverage · charge_perfection · collateral_guardrail |
 
-The three bolded agents are **anti-goal** agents, and they are the reason this
-is an architecture rather than five more functions:
+The four bolded agents are **anti-goal** agents, and they are the reason this is
+an architecture rather than five more functions:
 
 - **`decision_sufficiency`** must judge whether a file is *decidable* without
   shaping data to fit the mould of an approvable loan. Enforced by construction:
@@ -132,6 +134,18 @@ control instead.
 > with `runLrsAggregate`. The day they agree, the aggregate view has stopped
 > being load-bearing and nothing else would notice.
 
+- **`security_value`** must value the asset without knowing what is being asked
+  for. A valuer who can see the loan arrives at the loan. It receives a
+  `SecurityView` = `Omit<Application, 'askInr' | 'creditAssessment' | 'decision'
+  | 'rejectionCode' | 'outcome'>`, and **exactly one agent sees the ask** —
+  `coverage`, whose only job is the comparison.
+
+> ⚠️ **`charge_perfection` reads `perfection_status` and must never read
+> document presence.** A deed in a folder is not a charge. The guardrail forces
+> every document to `verified` and requires the verdict not to move; `blocksS09`
+> only binds from S09 onward, because C4 is `requiredByStage:
+> 'disbursement_t1'` and a file at S04 correctly has no charge at all.
+
 **Two grades of authority at S13.** `VAL-CRS-21` (LRS) and `VAL-CRS-22` (Form
 A2/FEMA) are `statutory` and cannot be overridden — same distinction as
 `nonOverridable` on the S03 and S08 forward gates. `VAL-CRS-23` (visa) and
@@ -146,7 +160,8 @@ are refused **twice**: `overrideTrancheGate` will not write one and
 > after, 32 of 40.
 
 **Data:** 214 applications (14 curated + 200 generated), 10,777 documents, 37
-with a labelled outcome, 15 with a tranche schedule (44 tranches). The clock is **frozen at 2026-07-20**. `Reset demo
+with a labelled outcome, 15 with a tranche schedule (44 tranches), 98 secured
+(94 carrying a generated security). The clock is **frozen at 2026-07-20**. `Reset demo
 data` reproduces the seed exactly.
 
 ## What is NOT built
@@ -160,6 +175,8 @@ delivered** — they are debts, not ideas.
 `v2.4.0`, disbursement in `v2.5.0`. The byte-identical tests that make the
 anti-goals real are checked in and re-runnable, each with a control that must
 fail if the test beside it has gone vacuous.
+
+Disbursement joined in `v2.5.0` and collateral in `v2.6.0`.
 
 **Still open: the `sanction` swarm has no section.** Seven agents producing
 seven documents, and nothing asserts they are deterministic or that the pack a
@@ -200,9 +217,11 @@ lookup, and Form A2 lodgement is a filing, not a boolean on a record.
   so a single file cannot reach a USD 250,000 ceiling; only the rigged control
   exercises the breach path. The agent's value here is the headroom figure, and
   it cannot see remittances made through another bank in the same year.
-- **S09 collateral, S03 KYC and S12 documentation still have no agent.** S09 is
-  the strongest remaining candidate: four validations, legal and technical
-  valuation genuinely parallel, and the slowest closure path in the seed.
+- **S03 KYC and S12 documentation still have no agent.** S09 was built in
+  `v2.6.0`; these two are what remain.
+- **Situs cannot currently fail.** Every instrument the product accepts is
+  Indian-situs, so `VAL-EXT-15` is true by construction — computed rather than
+  assumed, and it would bind if a foreign asset were offered.
 - **The RM surface has no dedicated readiness panel**; it inherits the S05 gate
   failure through `evaluateGate` and shows only that.
 - **HITL never received agent findings.** The original Phase F said Integrations

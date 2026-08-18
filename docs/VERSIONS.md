@@ -131,7 +131,7 @@ more swarm functions, and each is held by a guardrail agent that can fail:
 |---|---|
 | Agent runtime | `src/lib/agents/{types,registry,runtime}.ts` |
 | Assisting swarms | `src/lib/agents/{documents,sanction,university,universityCorpus}.ts` |
-| **Orchestrators** | `src/lib/agents/{onboarding,credit,disbursement}.ts` |
+| **Orchestrators** | `src/lib/agents/{onboarding,credit,disbursement,collateral}.ts` |
 | Timer state | `src/store/agentStore.ts` — the **only** timer-driven state in the codebase |
 | Agent UI | `src/journeys/common/{AgentSwarm,SmartFill}.tsx` |
 | Self-declaration | `src/lib/declared.ts`, `src/journeys/useDeclaration.ts` |
@@ -208,6 +208,7 @@ screen which used to only take typing now also offers an upload.
 | `v2.3.1` | Marker reconciliation — `§V3` → `§v5`; this document rewritten |
 | `v2.4.0` | The anti-goal harness at `/__dev/agents`; two seed contradictions closed |
 | `v2.5.0` | The disbursement gating orchestrator — five agents, per tranche, two grades of authority |
+| `v2.6.0` | The collateral orchestrator — the valuation never sees the ask; held is not perfected |
 
 The rule for this repo, unchanged: **no push without a version** — a semver tag,
 a `CHANGELOG.md` entry recording what was *verified*, and a GitHub Release.
